@@ -21,7 +21,7 @@ runcmd:
 write_files:
   - path: /etc/caddy/Caddyfile
     content: |
-      sdrnow.fr {
+      sdrnow.fr, www.sdrnow.fr {
           root * /var/www/html
           file_server
       }
