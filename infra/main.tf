@@ -43,7 +43,3 @@ resource "scaleway_instance_server" "web" {
 output "server_ip" {
   value = scaleway_instance_ip.public_ip.address
 }
-
-output "server_ipv6" {
-  value = scaleway_instance_server.web.ipv6_address
-}
