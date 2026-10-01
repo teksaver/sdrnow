@@ -27,7 +27,7 @@ resource "scaleway_instance_ip" "public_ip" {
 
 resource "scaleway_instance_server" "web" {
   name  = "sdrnow-web"
-  type  = "PLAY2-PICO"
+  type  = "STARDUST1-S"
   image = "ubuntu_jammy"
   zone  = "fr-par-1"
 
