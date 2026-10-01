@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>SDRnow Landing Page - Rapport de Forge</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f9fafb;
+            color: #1f2937;
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            position: relative;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 20px;
+        }
+        h1 {
+            color: #111827;
+            margin-bottom: 10px;
+        }
+        .seal-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 120px;
+            height: 120px;
+            transform: rotate(15deg);
+            opacity: 0.9;
+        }
+        .section-title {
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 8px;
+            margin-top: 30px;
+        }
+        .card {
+            background-color: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border-left: 4px solid #3b82f6;
+        }
+        .rejected {
+            border-left-color: #ef4444;
+        }
+        .voices {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .voice-tag {
+            background-color: #e5e7eb;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- SVG Stamp -->
+        <div class="seal-container">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="100" cy="100" r="90" fill="none" stroke="#22c55e" stroke-width="8" stroke-dasharray="10, 5"/>
+                <circle cx="100" cy="100" r="75" fill="none" stroke="#22c55e" stroke-width="4"/>
+                <text x="100" y="110" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#22c55e" text-anchor="middle" letter-spacing="2">HARDENED</text>
+                <text x="100" y="145" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#22c55e" text-anchor="middle">SDRNOW IDEATION</text>
+            </svg>
+        </div>
+
+        <div class="header">
+            <h1>Rapport de Forge : Landing Page SDRnow</h1>
+            <p><strong>Résultat :</strong> Idée solidifiée, affinée et prête pour la production.</p>
+        </div>
+
+        <h2 class="section-title">Résumé de l'Issue</h2>
+        <p>L'idée initiale d'une page web "vitrine" générale a été testée et recadrée pour répondre exactement au besoin réel d'un service d'outbound B2B. Le site passe d'un concept d'acquisition large à un outil d'aide à la vente hyper-ciblé, destiné aux prospects chauds et aux décideurs internes.</p>
+
+        <h2 class="section-title">Décisions Verrouillées (Locks)</h2>
+        <div class="card">
+            <strong>Format & Cible</strong><br>
+            Site one-page minimaliste. Visiteur qualifié, pas d'éducation sur le besoin. CTA unique : "Mon agenda".
+        </div>
+        <div class="card">
+            <strong>Contenu de Réassurance</strong><br>
+            Méthodologie détaillée (pour prouver l'expertise et la structure) et Pricing/Packages (pour valider le budget avec les associés/CFO).
+        </div>
+
+        <h2 class="section-title">Options Rejetées (Killed)</h2>
+        <div class="card rejected">
+            <strong>Trafic Organique / SEO</strong><br>
+            Diluerait le message fort pour un trafic froid hypothétique. La cible est le prospect qui a déjà un pied dans la porte.
+        </div>
+        <div class="card rejected">
+            <strong>Cas d'usage et KPIs publics</strong><br>
+            Conservés hors-ligne pour les démos live. Raisons : confidentialité client, protection de la propriété intellectuelle (recette) et maintien d'un effet levier en direct.
+        </div>
+
+        <h2 class="section-title">Crédits (Les Voix de la Forge)</h2>
+        <p>Merci aux participants qui ont attaqué et affiné cette idée :</p>
+        <div class="voices">
+            <span class="voice-tag">👩‍💼 Mary (Business Analyst)</span>
+            <span class="voice-tag">🎯 Céline (VP Sales ciblée)</span>
+            <span class="voice-tag">📈 Romain (Expert SEO & Growth)</span>
+            <span class="voice-tag">🎨 Sally (UX Designer)</span>
+            <span class="voice-tag">🏗️ Winston (Architecte)</span>
+            <span class="voice-tag">📋 John (Product Manager)</span>
+            <span class="voice-tag">💼 Marc (CFO)</span>
+            <span class="voice-tag">💻 Amelia (Senior Software Engineer)</span>
+        </div>
+    </div>
+</body>
+</html>

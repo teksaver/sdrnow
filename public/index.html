@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDRnow - Votre croissance, structurée</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#F26522',
+                        background: '#FFFFFF',
+                        surface: '#F9FAFB',
+                        text_main: '#111827',
+                        text_muted: '#4B5563',
+                        border: '#E5E7EB',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        DEFAULT: '4px',
+                    },
+                    spacing: {
+                        'section': '80px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            color: #111827;
+            background-color: #FFFFFF;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body class="antialiased text-text_main bg-background">
+    
+    <!-- Hero Section -->
+    <header class="w-full bg-surface border-b border-border py-section px-4 sm:px-6 lg:px-8">
+        <div class="max-w-4xl mx-auto text-center">
+            <h1 class="text-4xl md:text-5xl font-bold mb-6 text-text_main tracking-tight">Accélérez vos ventes B2B avec SDRnow</h1>
+            <p class="text-xl text-text_muted mb-10 max-w-2xl mx-auto">Une prospection structurée, mesurable et orientée ROI. Gagnez des opportunités qualifiées sans recruter de SDR en interne.</p>
+            <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" class="inline-block bg-primary text-white font-bold py-3 px-8 rounded hover:bg-orange-600 transition-colors">Mon agenda</a>
+        </div>
+    </header>
+
+    <!-- Methodology Section -->
+    <section class="py-section px-4 sm:px-6 lg:px-8 bg-background">
+        <div class="max-w-5xl mx-auto">
+            <h2 class="text-3xl font-bold mb-12 text-center">La Méthode SDRnow</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Step 1 -->
+                <div class="p-6 bg-surface border border-border rounded">
+                    <div class="text-primary mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Ciblage Chirurgical</h3>
+                    <ul class="text-text_muted space-y-2 list-disc list-inside">
+                        <li>Identification des décideurs clés</li>
+                        <li>Qualification des comptes cibles</li>
+                        <li>Base de données enrichie et vérifiée</li>
+                    </ul>
+                </div>
+                <!-- Step 2 -->
+                <div class="p-6 bg-surface border border-border rounded">
+                    <div class="text-primary mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Approche Multicanale</h3>
+                    <ul class="text-text_muted space-y-2 list-disc list-inside">
+                        <li>Séquences Email personnalisées</li>
+                        <li>Prospection LinkedIn ciblée</li>
+                        <li>Suivi rigoureux et itératif</li>
+                    </ul>
+                </div>
+                <!-- Step 3 -->
+                <div class="p-6 bg-surface border border-border rounded">
+                    <div class="text-primary mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Conversion & ROI</h3>
+                    <ul class="text-text_muted space-y-2 list-disc list-inside">
+                        <li>Rendez-vous qualifiés générés</li>
+                        <li>Reporting transparent et metrics</li>
+                        <li>Optimisation continue des campagnes</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="py-section px-4 sm:px-6 lg:px-8 bg-primary text-white">
+        <div class="max-w-5xl mx-auto">
+            <h2 class="text-3xl font-bold mb-12 text-center">Packages & Pricing</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <!-- Starter Package -->
+                <div class="p-8 bg-white text-text_main rounded shadow-sm border border-border">
+                    <h3 class="text-2xl font-bold mb-2">SDRnow Starter</h3>
+                    <p class="text-primary font-bold text-3xl mb-6">1990 € <span class="text-lg text-text_muted font-normal">/test</span></p>
+                    <p class="text-text_muted mb-6">Idéal pour valider l'approche sur un segment cible.</p>
+                    <ul class="space-y-3 mb-8 text-text_muted">
+                        <li class="flex items-center"><svg class="w-5 h-5 text-primary mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Campagne de 3 à 5 jours</li>
+                        <li class="flex items-center"><svg class="w-5 h-5 text-primary mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 100 Leads qualifiés</li>
+                        <li class="flex items-center"><svg class="w-5 h-5 text-primary mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Séquences Email & LinkedIn</li>
+                    </ul>
+                    <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-orange-600 transition-colors">Mon agenda</a>
+                </div>
+                <!-- Strategy Package -->
+                <div class="p-8 bg-surface text-text_main rounded border border-border flex flex-col">
+                    <h3 class="text-2xl font-bold mb-2">Strategy</h3>
+                    <p class="text-text_main font-bold text-3xl mb-6">Sur devis</p>
+                    <p class="text-text_muted mb-6">Pour une externalisation complète de votre prospection.</p>
+                    <ul class="space-y-3 mb-8 text-text_muted flex-grow">
+                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Campagnes en continu</li>
+                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Volume de leads sur-mesure</li>
+                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Stratégie multicanale avancée</li>
+                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Point de suivi hebdomadaire</li>
+                    </ul>
+                    <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-transparent border-2 border-text_main text-text_main font-bold py-3 px-4 rounded hover:bg-text_main hover:text-white transition-colors">Mon agenda</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 px-4 border-t border-border bg-background text-center">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-bold mb-6">Prêt à accélérer vos ventes ?</h2>
+            <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" class="inline-block bg-primary text-white font-bold py-3 px-8 rounded hover:bg-orange-600 transition-colors mb-8">Mon agenda</a>
+            <p class="text-text_muted text-sm">© 2026 SDRnow. Tous droits réservés. <a href="mailto:contact@sdrnow.fr" class="underline">contact@sdrnow.fr</a></p>
+        </div>
+    </footer>
+
+</body>
+</html>
