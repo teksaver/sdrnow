@@ -29,6 +29,11 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
           AWS_REGION: fr-par
 
+      - name: Generate Password Hash
+        run: |
+          HASH=$(docker run --rm caddy caddy hash-password --plaintext "${{ secrets.STAGING_PASSWORD }}")
+          echo "STAGING_PASSWORD_HASH=$HASH" >> $GITHUB_ENV
+
       - name: OpenTofu Apply
         run: tofu apply -replace="scaleway_instance_server.web" -auto-approve
         working-directory: ./infra
@@ -39,3 +44,4 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.SCW_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
           AWS_REGION: fr-par
+          TF_VAR_staging_password_hash: ${{ env.STAGING_PASSWORD_HASH }}

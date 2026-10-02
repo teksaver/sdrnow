@@ -25,8 +25,13 @@ resource "scaleway_instance_ip" "public_ip" {
   zone = "fr-par-1"
 }
 
+variable "staging_password_hash" {
+  description = "Bcrypt hash for the staging environment basic auth"
+  type        = string
+}
+
 resource "scaleway_instance_server" "web" {
-  name  = "sdrnow-web-v2"
+  name  = "sdrnow-web-v4"
   type  = "STARDUST1-S"
   image = "ubuntu_jammy"
   zone  = "fr-par-1"
@@ -36,7 +41,9 @@ resource "scaleway_instance_server" "web" {
   user_data = {
     cloud-init = templatefile("${path.module}/cloud-init.yaml", {
       index_html_b64 = filebase64("${path.module}/../public/index.html")
+      staging_html_b64 = filebase64("${path.module}/../public/staging.html")
       mentions_legales_html_b64 = filebase64("${path.module}/../public/mentions-legales.html")
+      staging_password_hash = var.staging_password_hash
     })
   }
 }

@@ -24,10 +24,17 @@ write_files:
       sdrnow.fr, www.sdrnow.fr {
           root * /var/www/html
           file_server
+          
+          basicauth /staging.html {
+              client ${staging_password_hash}
+          }
       }
   - path: /var/www/html/index.html
     encoding: base64
     content: ${index_html_b64}
+  - path: /var/www/html/staging.html
+    encoding: base64
+    content: ${staging_html_b64}
   - path: /var/www/html/mentions-legales.html
     encoding: base64
     content: ${mentions_legales_html_b64}
