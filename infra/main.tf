@@ -31,7 +31,7 @@ variable "staging_password_hash" {
 }
 
 resource "scaleway_instance_server" "web" {
-  name  = "sdrnow-web-v4"
+  name  = "sdrnow-web-v5"
   type  = "STARDUST1-S"
   image = "ubuntu_jammy"
   zone  = "fr-par-1"
