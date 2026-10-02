@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mentions Légales - SDRnow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#F26522',
+                        background: '#FFFFFF',
+                        surface: '#F9FAFB',
+                        text_main: '#111827',
+                        text_muted: '#4B5563',
+                        border: '#E5E7EB',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+    </style>
+</head>
+<body class="antialiased text-text_main bg-background flex flex-col min-h-screen">
+    
+    <header class="w-full bg-surface border-b border-border py-6 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold text-primary hover:text-orange-600 transition-colors">SDRnow</a>
+            <a href="/" class="text-text_muted hover:text-text_main font-medium">Retour à l'accueil</a>
+        </div>
+    </header>
+
+    <main class="flex-grow py-16 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-3xl mx-auto prose prose-slate">
+            <h1 class="text-3xl font-bold mb-8">Mentions Légales</h1>
+            
+            <section class="mb-8">
+                <h2 class="text-xl font-bold mb-4">1. Éditeur du site</h2>
+                <p class="text-text_muted mb-2">Le site <strong>sdrnow.fr</strong> est édité par :</p>
+                <ul class="text-text_muted list-disc list-inside">
+                    <li>Nom de la société : Jean-Charles Maleysson EI</li>
+                    <li>Email de contact : <a href="mailto:contact@sdrnow.fr" class="text-primary hover:underline">contact@sdrnow.fr</a></li>
+                    <li>Directeur de la publication : Jean-Charles Maleysson</li>
+                </ul>
+            </section>
+
+            <section class="mb-8">
+                <h2 class="text-xl font-bold mb-4">2. Hébergement</h2>
+                <p class="text-text_muted mb-2">Le site est hébergé par :</p>
+                <ul class="text-text_muted list-disc list-inside">
+                    <li>Société : Scaleway SAS</li>
+                    <li>Adresse : 8 rue de la Ville l’Evêque, 75008 Paris, France</li>
+                    <li>Site web : <a href="https://www.scaleway.com" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">www.scaleway.com</a></li>
+                </ul>
+            </section>
+
+            <section class="mb-8">
+                <h2 class="text-xl font-bold mb-4">3. Propriété intellectuelle</h2>
+                <p class="text-text_muted">L'ensemble de ce site relève de la législation française et internationale sur le droit d'auteur et la propriété intellectuelle. Tous les droits de reproduction sont réservés, y compris pour les documents téléchargeables et les représentations iconographiques et photographiques.</p>
+            </section>
+
+            <section class="mb-8">
+                <h2 class="text-xl font-bold mb-4">4. Données personnelles</h2>
+                <p class="text-text_muted">Le site sdrnow.fr ne collecte aucune donnée personnelle à l'insu des utilisateurs. La prise de rendez-vous est gérée par la plateforme tierce Calendly, soumise à sa propre politique de confidentialité.</p>
+            </section>
+        </div>
+    </main>
+
+    <footer class="py-8 px-4 border-t border-border bg-surface text-center">
+        <div class="max-w-4xl mx-auto">
+            <p class="text-text_muted text-sm">© 2026 SDRnow. Tous droits réservés.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

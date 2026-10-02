@@ -28,3 +28,6 @@ write_files:
   - path: /var/www/html/index.html
     encoding: base64
     content: ${index_html_b64}
+  - path: /var/www/html/mentions-legales.html
+    encoding: base64
+    content: ${mentions_legales_html_b64}

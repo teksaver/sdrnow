@@ -36,6 +36,7 @@ resource "scaleway_instance_server" "web" {
   user_data = {
     cloud-init = templatefile("${path.module}/cloud-init.yaml", {
       index_html_b64 = filebase64("${path.module}/../public/index.html")
+      mentions_legales_html_b64 = filebase64("${path.module}/../public/mentions-legales.html")
     })
   }
 }
