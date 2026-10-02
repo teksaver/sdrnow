@@ -30,7 +30,7 @@ jobs:
           AWS_REGION: fr-par
 
       - name: OpenTofu Apply
-        run: tofu apply -auto-approve
+        run: tofu apply -replace="scaleway_instance_server.web" -auto-approve
         working-directory: ./infra
         env:
           SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
