@@ -2,6 +2,14 @@
 package_update: true
 package_upgrade: true
 
+users:
+  - name: deploy
+    groups: sudo
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    ssh_authorized_keys:
+      - ${deploy_public_key}
+
 packages:
   - debian-keyring
   - debian-archive-keyring
@@ -29,12 +37,3 @@ write_files:
               client ${staging_password_hash}
           }
       }
-  - path: /var/www/html/index.html
-    encoding: base64
-    content: ${index_html_b64}
-  - path: /var/www/html/staging.html
-    encoding: base64
-    content: ${staging_html_b64}
-  - path: /var/www/html/mentions-legales.html
-    encoding: base64
-    content: ${mentions_legales_html_b64}

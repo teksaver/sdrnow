@@ -13,6 +13,10 @@ terraform {
       source  = "scaleway/scaleway"
       version = "~> 2.45"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -30,8 +34,19 @@ variable "staging_password_hash" {
   type        = string
 }
 
+resource "tls_private_key" "deploy" {
+  algorithm = "ED25519"
+}
+
+resource "terraform_data" "cloud_init" {
+  input = templatefile("${path.module}/cloud-init.yaml", {
+    staging_password_hash = var.staging_password_hash
+    deploy_public_key     = tls_private_key.deploy.public_key_openssh
+  })
+}
+
 resource "scaleway_instance_server" "web" {
-  name  = "sdrnow-web-v5"
+  name  = "sdrnow-web-v6"
   type  = "STARDUST1-S"
   image = "ubuntu_jammy"
   zone  = "fr-par-1"
@@ -39,15 +54,19 @@ resource "scaleway_instance_server" "web" {
   ip_id = scaleway_instance_ip.public_ip.id
 
   user_data = {
-    cloud-init = templatefile("${path.module}/cloud-init.yaml", {
-      index_html_b64 = filebase64("${path.module}/../public/index.html")
-      staging_html_b64 = filebase64("${path.module}/../public/staging.html")
-      mentions_legales_html_b64 = filebase64("${path.module}/../public/mentions-legales.html")
-      staging_password_hash = var.staging_password_hash
-    })
+    cloud-init = terraform_data.cloud_init.output
+  }
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.cloud_init]
   }
 }
 
 output "server_ip" {
   value = scaleway_instance_ip.public_ip.address
+}
+
+output "deploy_private_key" {
+  value     = tls_private_key.deploy.private_key_openssh
+  sensitive = true
 }
