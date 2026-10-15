@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDRnow - Votre croissance, structurée</title>
+    <title>SDRnow - Réveillez vos leads dormants</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -31,7 +31,7 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap');
         body {
             font-family: 'Inter', system-ui, sans-serif;
             color: #111827;
@@ -43,53 +43,95 @@
 <body class="antialiased text-text_main bg-background">
     
     <!-- Hero Section -->
-    <header class="w-full bg-surface border-b border-border py-section px-4 sm:px-6 lg:px-8">
+    <header class="w-full bg-surface border-b border-border py-20 px-4 sm:px-6 lg:px-8">
         <div class="max-w-4xl mx-auto text-center">
-            <h1 class="text-4xl md:text-5xl font-bold mb-6 text-text_main tracking-tight">Accélérez vos ventes B2B avec SDRnow</h1>
-            <p class="text-xl text-text_muted mb-10 max-w-2xl mx-auto">Une prospection structurée, mesurable et orientée ROI. Gagnez des opportunités qualifiées sans recruter de SDR en interne.</p>
-            <a href="https://calendly.com/jc-maleysson/30min" target="_blank" rel="noopener noreferrer" class="inline-block bg-primary text-white font-bold py-3 px-8 rounded hover:bg-orange-600 transition-colors">Mon agenda</a>
+            <!-- Logo SDRnow -->
+            <div class="mb-8">
+                <img src="/assets/logo.svg" alt="SDRnow" class="h-10 sm:h-12 w-auto mx-auto">
+            </div>
+            <span class="text-primary font-bold tracking-wider uppercase text-sm mb-4 block">Solution d'externalisation commerciale</span>
+            <h1 class="text-4xl md:text-6xl font-extrabold mb-6 text-text_main tracking-tight leading-tight">
+                Nous transformons vos prospects inexploités<br>
+                <span class="text-primary">en rendez-vous<br> qualifiés<br> dans votre agenda.</span>
+            </h1>
+            <p class="text-xl text-text_muted mb-10 max-w-2xl mx-auto">
+                Vous devez contacter des leads rapidement avant qu’ils ne se dirigent vers la concurrence ?
+Des prospects dormants s’empilent dans votre CRM ?
+Besoin d’alimenter votre tunnel de vente avec une campagne de prospection multicanale ? Une nouvelle offre à tester auprès d’un échantillon de vos fichiers clients ?
+            </p>
+            <div class="flex flex-col items-center">
+                <a href="https://calendly.com/jc-maleysson/30min" target="_blank" rel="noopener noreferrer" class="inline-block bg-primary text-white font-bold text-lg py-4 px-10 rounded shadow-lg hover:bg-orange-600 transition-all transform hover:-translate-y-1">
+                    Je prends rendez-vous
+                </a>
+                <span class="text-sm text-text_muted mt-3 font-medium">Échange de 30 min • Sans engagement</span>
+            </div>
         </div>
     </header>
 
+    <!-- Social Proof / Use Case Section -->
+    <section class="py-16 px-4 sm:px-6 lg:px-8 bg-white border-b border-border">
+        <div class="max-w-7xl mx-auto text-center">
+            <h2 class="text-3xl font-bold mb-4">La preuve par l'exemple</h2>
+            <p class="text-lg text-text_muted mb-10 max-w-2xl mx-auto">
+                Cas d'usage réel d'une campagne de réactivation<br>sur un portefeuille de leads inexploités.
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+                    <div class="text-3xl lg:text-4xl font-extrabold text-primary mb-2">+400%</div>
+                    <div class="text-sm text-text_muted font-medium px-2">De croissance de revenus générés en 6 mois</div>
+                </div>
+                <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+                    <div class="text-3xl lg:text-4xl font-extrabold text-primary mb-2">+1800</div>
+                    <div class="text-sm text-text_muted font-medium px-2">Leads dormants mis à jour dans le CRM le 1er mois</div>
+                </div>
+                <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+                    <div class="text-3xl lg:text-4xl whitespace-nowrap font-extrabold text-primary mb-2">3 / jour</div>
+                    <div class="text-sm text-text_muted font-medium px-2">Obtention de rendez-vous qualifiés dès la 1ère semaine</div>
+                </div>
+                <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+                    <div class="text-3xl lg:text-4xl font-extrabold text-primary mb-2">20%</div>
+                    <div class="text-sm text-text_muted font-medium px-2">Taux de conversion final par les équipes Sales</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Methodology Section -->
-    <section class="py-section px-4 sm:px-6 lg:px-8 bg-background">
+    <section class="py-section px-4 sm:px-6 lg:px-8 bg-surface border-b border-border">
         <div class="max-w-5xl mx-auto">
-            <h2 class="text-3xl font-bold mb-12 text-center">La Méthode SDRnow</h2>
+            <h2 class="text-3xl font-bold mb-12 text-center">Notre force ? Détecter le moment de la relation client où seul un point de contact humain, incarné et authentique, va créer la réassurance nécessaire.</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <!-- Step 1 -->
-                <div class="p-6 bg-surface border border-border rounded">
-                    <div class="text-primary mb-4">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Ciblage Chirurgical</h3>
-                    <ul class="text-text_muted space-y-2 list-disc list-inside">
-                        <li>Identification des décideurs clés</li>
-                        <li>Qualification des comptes cibles</li>
-                        <li>Base de données enrichie et vérifiée</li>
+                <div class="p-8 bg-white border border-border rounded shadow-sm relative">
+                    <div class="absolute -top-4 -left-4 w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl border-4 border-surface">1</div>
+                    <h3 class="text-xl font-bold mb-3 mt-2">Audit & Scénarisation</h3>
+                    <p class="text-text_muted mb-4">Nous identifions les poches de valeur dans votre CRM et nous concevons une arborescence sur-mesure.</p>
+                    <ul class="text-text_muted space-y-2 list-disc list-inside text-sm">
+                        <li>Activation de vos prospects dormants</li>
+                        <li>Alignement sur votre ligne éditoriale et votre image de marque</li>
+                        <li>Création d'un dataset homogène</li>
                     </ul>
                 </div>
                 <!-- Step 2 -->
-                <div class="p-6 bg-surface border border-border rounded">
-                    <div class="text-primary mb-4">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Approche Multicanale</h3>
-                    <ul class="text-text_muted space-y-2 list-disc list-inside">
-                        <li>Séquences Email personnalisées</li>
-                        <li>Prospection LinkedIn ciblée</li>
-                        <li>Suivi rigoureux et itératif</li>
+                <div class="p-8 bg-white border border-border rounded shadow-sm relative">
+                    <div class="absolute -top-4 -left-4 w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl border-4 border-surface">2</div>
+                    <h3 class="text-xl font-bold mb-3 mt-2">Exécution Multicanale</h3>
+                    <p class="text-text_muted mb-4">Maillage d’une campagne commerciale multicanale pour atteindre votre audience selon ses préférences</p>
+                    <ul class="text-text_muted space-y-2 list-disc list-inside text-sm">
+                        <li>Phoning : Pitch et messages vocaux</li>
+                        <li>Mailing : Doublage avec lien agenda</li>
+                        <li>Réseaux sociaux : Triplage sur les réseaux sociaux</li>
                     </ul>
                 </div>
                 <!-- Step 3 -->
-                <div class="p-6 bg-surface border border-border rounded">
-                    <div class="text-primary mb-4">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Conversion & ROI</h3>
-                    <ul class="text-text_muted space-y-2 list-disc list-inside">
-                        <li>Rendez-vous qualifiés générés</li>
-                        <li>Reporting transparent et metrics</li>
-                        <li>Optimisation continue des campagnes</li>
+                <div class="p-8 bg-white border border-border rounded shadow-sm relative">
+                    <div class="absolute -top-4 -left-4 w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl border-4 border-surface">3</div>
+                    <h3 class="text-xl font-bold mb-3 mt-2">Closing & Accélération</h3>
+                    <p class="text-text_muted mb-4">Vos commerciaux se concentrent uniquement sur les gestes à forte valeur ajoutée.</p>
+                    <ul class="text-text_muted space-y-2 list-disc list-inside text-sm">
+                        <li>Alimentation de l’agenda de vos commerciaux par des rendez-vous hyper-qualifiés pour des démonstrations ou du closing.</li>
+                        <li>Progression des leads dans le funnel</li>
+                        <li>Surcroît de ciblage de vos prochaines campagnes marketing grâce au nettoyage du CRM</li>
                     </ul>
                 </div>
             </div>
@@ -99,32 +141,54 @@
     <!-- Pricing Section -->
     <section class="py-section px-4 sm:px-6 lg:px-8 bg-primary text-white">
         <div class="max-w-5xl mx-auto">
-            <h2 class="text-3xl font-bold mb-12 text-center">Packages & Pricing</h2>
+            <h2 class="text-3xl font-bold mb-12 text-center">Notre proposition pour démarrer ensemble en confiance</h2>
+            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
                 <!-- Starter Package -->
-                <div class="p-8 bg-white text-text_main rounded shadow-sm border border-border">
-                    <h3 class="text-2xl font-bold mb-2">SDRnow Starter</h3>
-                    <p class="text-primary font-bold text-3xl mb-6">1990 € <span class="text-lg text-text_muted font-normal">/test</span></p>
-                    <p class="text-text_muted mb-6">Idéal pour valider l'approche sur un segment cible.</p>
-                    <ul class="space-y-3 mb-8 text-text_muted">
-                        <li class="flex items-center"><svg class="w-5 h-5 text-primary mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Campagne de 3 à 5 jours</li>
-                        <li class="flex items-center"><svg class="w-5 h-5 text-primary mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 100 Leads qualifiés</li>
-                        <li class="flex items-center"><svg class="w-5 h-5 text-primary mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Séquences Email & LinkedIn</li>
+                <div class="p-8 bg-white text-text_main rounded shadow-xl relative flex flex-col">
+                    <div class="absolute top-0 right-0 bg-text_main text-white text-xs font-bold px-3 py-1 rounded-bl rounded-tr uppercase tracking-wider">Populaire</div>
+                    <h3 class="text-2xl font-bold mb-2">Package SDRnow Starter</h3>
+                    <div class="mb-6">
+                        <span class="text-4xl font-extrabold text-primary">1 990 €</span><span class="text-lg text-text_muted font-medium"> HT</span>
+                    </div>
+                    <ul class="space-y-4 mb-8 text-text_main font-medium flex-grow">
+                        <li class="flex items-start">
+                            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 
+                            <span>Appel de <strong>100 leads</strong> ou prospects issus de vos listes</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 
+                            <span>Connexion sur votre CRM ou communication de votre listing</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 
+                            <span>Résultats sous 3 à 5 jours ouvrés (selon taux d'aboutissement)</span>
+                        </li>
                     </ul>
-                    <a href="https://calendly.com/jc-maleysson/30min" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-orange-600 transition-colors">Mon agenda</a>
+                    <a href="https://calendly.com/jc-maleysson/30min" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-primary text-white font-bold py-4 px-4 rounded hover:bg-orange-600 transition-colors mt-auto">Je prends rendez-vous</a>
                 </div>
+                
                 <!-- Strategy Package -->
-                <div class="p-8 bg-surface text-text_main rounded border border-border flex flex-col">
-                    <h3 class="text-2xl font-bold mb-2">Strategy</h3>
-                    <p class="text-text_main font-bold text-3xl mb-6">Sur devis</p>
-                    <p class="text-text_muted mb-6">Pour une externalisation complète de votre prospection.</p>
-                    <ul class="space-y-3 mb-8 text-text_muted flex-grow">
-                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Campagnes en continu</li>
-                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Volume de leads sur-mesure</li>
-                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Stratégie multicanale avancée</li>
-                        <li class="flex items-center"><svg class="w-5 h-5 text-text_muted mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Point de suivi hebdomadaire</li>
+                <div class="p-8 bg-white text-text_main rounded shadow-xl relative flex flex-col">
+                    <h3 class="text-2xl font-bold mb-2">Package SDRnow Strategy</h3>
+                    <div class="mb-6">
+                        <span class="text-4xl font-extrabold text-primary">Sur devis</span>
+                    </div>
+                    <ul class="space-y-4 mb-8 text-text_main font-medium flex-grow">
+                        <li class="flex items-start">
+                            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 
+                            <span>Audit sur les pratiques de ventes actuelles (Livrable : 1 cahier d’audit)</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 
+                            <span>Evolution ou refonte complète du pipe de vente (Livrable : Design du pipe)</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 
+                            <span>Exécution des campagnes et stratégie à long terme</span>
+                        </li>
                     </ul>
-                    <a href="https://calendly.com/jc-maleysson/30min" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-transparent border-2 border-text_main text-text_main font-bold py-3 px-4 rounded hover:bg-text_main hover:text-white transition-colors">Mon agenda</a>
+                    <a href="https://calendly.com/jc-maleysson/30min" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-white border-2 border-primary text-primary font-bold py-4 px-4 rounded hover:bg-orange-50 transition-colors mt-auto">J’expose mes enjeux</a>
                 </div>
             </div>
         </div>
@@ -132,10 +196,12 @@
 
     <!-- Footer -->
     <footer class="py-12 px-4 border-t border-border bg-background text-center">
-        <div class="max-w-4xl mx-auto">
-            <h2 class="text-2xl font-bold mb-6">Prêt à accélérer vos ventes ?</h2>
-            <a href="https://calendly.com/jc-maleysson/30min" target="_blank" rel="noopener noreferrer" class="inline-block bg-primary text-white font-bold py-3 px-8 rounded hover:bg-orange-600 transition-colors mb-8">Mon agenda</a>
-            <p class="text-text_muted text-sm">© 2026 SDRnow. Tous droits réservés. <a href="mailto:contact@sdrnow.fr" class="underline hover:text-text_main">contact@sdrnow.fr</a> - <a href="/mentions-legales.html" class="underline hover:text-text_main">Mentions légales</a></p>
+        <div class="max-w-4xl mx-auto flex flex-col items-center">
+            <img src="/assets/logo.svg" alt="SDRnow" class="h-8 w-auto mb-6">
+            <div class="text-text_muted text-sm space-y-2">
+                <p><a href="tel:0667902494" class="hover:text-text_main">06 67 90 24 94</a></p>
+                <p>© 2026 SDRnow. Tous droits réservés. <a href="/mentions-legales.html" class="underline hover:text-text_main">Mentions légales</a></p>
+            </div>
         </div>
     </footer>
 
