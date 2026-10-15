@@ -87,11 +87,11 @@ jobs:
             ssh -o ConnectTimeout=2 $SSH_OPTS deploy@$SERVER_IP "echo 'SSH is up'" && break || sleep 5
           done
           
-          # Attendre que cloud-init ait terminé pour être sûr que Caddy est installé
-          ssh $SSH_OPTS deploy@$SERVER_IP "for i in {1..30}; do sudo test -d /var/www/html && break || sleep 5; done"
+          # Attendre que cloud-init ait terminé
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo cloud-init status --wait || true"
           
           # Copier les fichiers web
           ssh $SSH_OPTS deploy@$SERVER_IP "mkdir -p /tmp/public_files"
           scp $SSH_OPTS -r ../public/* deploy@$SERVER_IP:/tmp/public_files/
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html && sudo cp -r /tmp/public_files/* /var/www/html/ && sudo chown -R caddy:caddy /var/www/html/ && rm -rf /tmp/public_files"
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html && sudo cp -r /tmp/public_files/* /var/www/html/ && sudo chmod -R a+rX /var/www/html/ && (sudo chown -R caddy:caddy /var/www/html/ 2>/dev/null || sudo chown -R www-data:www-data /var/www/html/ 2>/dev/null || true) && (sudo systemctl reload caddy 2>/dev/null || true) && rm -rf /tmp/public_files"
         working-directory: ./infra
