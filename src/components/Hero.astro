@@ -1,0 +1,64 @@
+---
+import { useTranslations } from '../i18n/translations';
+
+interface Props {
+  lang: 'fr' | 'en';
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<header class="w-full bg-surface border-b border-border pt-6 pb-20 px-4 sm:px-6 lg:px-8 relative">
+  <!-- Top Bar with Language Switcher -->
+  <div class="max-w-5xl mx-auto flex justify-end items-center mb-8">
+    <div class="inline-flex items-center space-x-1 text-xs font-semibold bg-white border border-border rounded-full p-1 shadow-sm">
+      <a
+        href="/"
+        class={`px-3 py-1 rounded-full transition-colors ${lang === 'fr' ? 'bg-primary text-white' : 'text-text_muted hover:text-text_main'}`}
+        aria-label="Version française"
+      >
+        FR
+      </a>
+      <a
+        href="/en"
+        class={`px-3 py-1 rounded-full transition-colors ${lang === 'en' ? 'bg-primary text-white' : 'text-text_muted hover:text-text_main'}`}
+        aria-label="English version"
+      >
+        EN
+      </a>
+    </div>
+  </div>
+
+  <div class="max-w-4xl mx-auto text-center">
+    <!-- Logo SDRnow -->
+    <div class="mb-8">
+      <a href={lang === 'fr' ? '/' : '/en'} class="inline-block">
+        <img src="/assets/logo.svg" alt="SDRnow" class="h-10 sm:h-12 w-auto mx-auto" />
+      </a>
+    </div>
+    <span class="text-primary font-bold tracking-wider uppercase text-sm mb-4 block">
+      {t('hero.badge')}
+    </span>
+    <h1 class="text-4xl md:text-6xl font-extrabold mb-6 text-text_main tracking-tight leading-tight">
+      {t('hero.title_pre')}<br />
+      <span class="text-primary">{t('hero.title_highlight')}</span>
+    </h1>
+    <p class="text-xl text-text_muted mb-10 max-w-2xl mx-auto whitespace-pre-line">
+      {t('hero.description')}
+    </p>
+    <div class="flex flex-col items-center">
+      <a
+        href="https://calendly.com/jc-maleysson/30min"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-block bg-primary text-white font-bold text-lg py-4 px-10 rounded shadow-lg hover:bg-orange-600 transition-all transform hover:-translate-y-1"
+      >
+        {t('hero.cta')}
+      </a>
+      <span class="text-sm text-text_muted mt-3 font-medium">
+        {t('hero.sub_cta')}
+      </span>
+    </div>
+  </div>
+</header>

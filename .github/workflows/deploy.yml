@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - main
+      - staging
   pull_request:
     branches:
       - main
+      - staging
 
 jobs:
   validate:
-    name: Validate OpenTofu Configuration
+    name: Validate OpenTofu & Astro Build
     runs-on: ubuntu-latest
     env:
       SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
@@ -22,6 +24,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Astro site
+        run: npm run build
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v1
@@ -37,9 +51,9 @@ jobs:
         working-directory: ./infra
 
   deploy:
-    name: Deploy to Scaleway & SCP Public Assets
+    name: Deploy to Scaleway
     needs: validate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') && github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
@@ -51,6 +65,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Astro site
+        run: npm run build
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v1
@@ -72,26 +98,47 @@ jobs:
         env:
           TF_VAR_staging_password_hash: ${{ env.STAGING_PASSWORD_HASH }}
 
-      - name: Deploy HTML files via SCP
+      - name: Deploy Site via SCP & SSH
         run: |
-          # Extraire la clé SSH de Terraform et l'IP du serveur
+          # 1. Extraire la clé SSH de Terraform et l'IP du serveur
           tofu output -raw deploy_private_key > deploy_key.pem
           chmod 600 deploy_key.pem
           SERVER_IP=$(tofu output -raw server_ip)
           
-          # Options SSH pour ignorer la vérification de l'hôte (nécessaire pour un serveur fraîchement créé)
+          # Options SSH pour ignorer la vérification de l'hôte
           SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i deploy_key.pem"
           
-          # Attendre que SSH soit disponible
+          # 2. Attendre que SSH soit disponible
           for i in {1..30}; do
             ssh -o ConnectTimeout=2 $SSH_OPTS deploy@$SERVER_IP "echo 'SSH is up'" && break || sleep 5
           done
           
-          # Attendre que cloud-init ait terminé
+          # 3. Attendre que cloud-init ait terminé
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo cloud-init status --wait || true"
           
-          # Copier les fichiers web
-          ssh $SSH_OPTS deploy@$SERVER_IP "mkdir -p /tmp/public_files"
-          scp $SSH_OPTS -r ../public/* deploy@$SERVER_IP:/tmp/public_files/
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html && sudo cp -r /tmp/public_files/* /var/www/html/ && sudo chmod -R a+rX /var/www/html/ && (sudo chown -R caddy:caddy /var/www/html/ 2>/dev/null || sudo chown -R www-data:www-data /var/www/html/ 2>/dev/null || true) && (sudo systemctl reload caddy 2>/dev/null || true) && rm -rf /tmp/public_files"
+          # 4. Préparer le fichier Caddyfile localement avec le hash
+          node -e "
+          const fs = require('fs');
+          let tpl = fs.readFileSync('Caddyfile.template', 'utf8');
+          tpl = tpl.replace('__STAGING_HASH__', () => process.env.STAGING_PASSWORD_HASH);
+          fs.writeFileSync('/tmp/Caddyfile', tpl);
+          "
+
+          # 5. Déployer la configuration Caddy
+          scp $SSH_OPTS /tmp/Caddyfile deploy@$SERVER_IP:/tmp/Caddyfile
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html /var/www/staging && sudo cp /tmp/Caddyfile /etc/caddy/Caddyfile && rm /tmp/Caddyfile && (sudo systemctl reload caddy 2>/dev/null || true)"
+
+          # 6. Déterminer le dossier de destination selon la branche
+          if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+            TARGET_DIR="/var/www/staging"
+            echo "Deploying to STAGING ($TARGET_DIR)..."
+          else
+            TARGET_DIR="/var/www/html"
+            echo "Deploying to PRODUCTION ($TARGET_DIR)..."
+          fi
+
+          # 7. Copier le build Astro généré dans dist
+          ssh $SSH_OPTS deploy@$SERVER_IP "mkdir -p /tmp/dist_files"
+          scp $SSH_OPTS -r ../dist/* deploy@$SERVER_IP:/tmp/dist_files/
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p $TARGET_DIR && sudo rm -rf $TARGET_DIR/* && sudo cp -r /tmp/dist_files/* $TARGET_DIR/ && sudo chmod -R a+rX /var/www/ && (sudo chown -R caddy:caddy /var/www/ 2>/dev/null || sudo chown -R www-data:www-data /var/www/ 2>/dev/null || true) && (sudo systemctl reload caddy 2>/dev/null || true) && rm -rf /tmp/dist_files"
         working-directory: ./infra

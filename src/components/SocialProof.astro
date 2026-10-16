@@ -1,0 +1,37 @@
+---
+import { useTranslations } from '../i18n/translations';
+
+interface Props {
+  lang: 'fr' | 'en';
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<section class="py-16 px-4 sm:px-6 lg:px-8 bg-white border-b border-border">
+  <div class="max-w-7xl mx-auto text-center">
+    <h2 class="text-3xl font-bold mb-4">{t('proof.title')}</h2>
+    <p class="text-lg text-text_muted mb-10 max-w-2xl mx-auto">
+      {t('proof.subtitle')}
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+        <div class="text-3xl lg:text-4xl font-extrabold text-primary mb-2">{t('proof.stat1_value')}</div>
+        <div class="text-sm text-text_muted font-medium px-2">{t('proof.stat1_label')}</div>
+      </div>
+      <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+        <div class="text-3xl lg:text-4xl font-extrabold text-primary mb-2">{t('proof.stat2_value')}</div>
+        <div class="text-sm text-text_muted font-medium px-2">{t('proof.stat2_label')}</div>
+      </div>
+      <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+        <div class="text-3xl lg:text-4xl whitespace-nowrap font-extrabold text-primary mb-2">{t('proof.stat3_value')}</div>
+        <div class="text-sm text-text_muted font-medium px-2">{t('proof.stat3_label')}</div>
+      </div>
+      <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
+        <div class="text-3xl lg:text-4xl font-extrabold text-primary mb-2">{t('proof.stat4_value')}</div>
+        <div class="text-sm text-text_muted font-medium px-2">{t('proof.stat4_label')}</div>
+      </div>
+    </div>
+  </div>
+</section>

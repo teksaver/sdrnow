@@ -58,7 +58,7 @@ resource "scaleway_instance_server" "web" {
   }
 
   lifecycle {
-    replace_triggered_by = [terraform_data.cloud_init]
+    ignore_changes = [user_data]
   }
 }
 
