@@ -15,7 +15,9 @@ const t = useTranslations('fr');
   <div class="flex flex-col min-h-screen">
     <header class="w-full bg-surface border-b border-border py-6 px-4 sm:px-6 lg:px-8">
       <div class="max-w-4xl mx-auto flex justify-between items-center">
-        <a href="/" class="text-2xl font-bold text-primary hover:text-orange-600 transition-colors">SDRnow</a>
+        <a href="/" class="inline-block">
+          <img src="/assets/logo.svg" alt="SDRnow" class="h-8 w-auto" />
+        </a>
         <div class="flex items-center space-x-6">
           <a href="/" class="text-text_muted hover:text-text_main font-medium">{t('nav.back_home')}</a>
           <div class="inline-flex items-center space-x-1 text-xs font-semibold bg-white border border-border rounded-full p-1 shadow-sm">
