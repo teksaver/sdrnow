@@ -1,0 +1,14 @@
+sdrnow.fr, www.sdrnow.fr {
+    root * /var/www/html
+    try_files {path} {path}/ {path}.html =404
+    file_server
+}
+
+staging.sdrnow.fr {
+    basicauth {
+        client __STAGING_HASH__
+    }
+    root * /var/www/staging
+    try_files {path} {path}/ {path}.html =404
+    file_server
+}

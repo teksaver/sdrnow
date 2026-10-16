@@ -1,0 +1,101 @@
+---
+import { useTranslations } from '../i18n/translations';
+
+interface Props {
+  lang: 'fr' | 'en';
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<section class="py-section px-4 sm:px-6 lg:px-8 bg-primary text-white">
+  <div class="max-w-5xl mx-auto">
+    <h2 class="text-3xl font-bold mb-12 text-center">
+      {t('pricing.title')}
+    </h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+      <!-- Starter Package -->
+      <div class="p-8 bg-white text-text_main rounded shadow-xl relative flex flex-col">
+        <div class="absolute top-0 right-0 bg-text_main text-white text-xs font-bold px-3 py-1 rounded-bl rounded-tr uppercase tracking-wider">
+          {t('pricing.starter_badge')}
+        </div>
+        <h3 class="text-2xl font-bold mb-2">{t('pricing.starter_title')}</h3>
+        <div class="mb-6">
+          <span class="text-4xl font-extrabold text-primary">{t('pricing.starter_price')}</span>
+          {t('pricing.starter_unit') && (
+            <span class="text-lg text-text_muted font-medium"> {t('pricing.starter_unit')}</span>
+          )}
+        </div>
+        <ul class="space-y-4 mb-8 text-text_main font-medium flex-grow">
+          <li class="flex items-start">
+            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span set:html={t('pricing.starter_f1')}></span>
+          </li>
+          <li class="flex items-start">
+            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span set:html={t('pricing.starter_f2')}></span>
+          </li>
+          <li class="flex items-start">
+            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span set:html={t('pricing.starter_f3')}></span>
+          </li>
+        </ul>
+        <a
+          href="https://calendly.com/jc-maleysson/30min"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="block w-full text-center bg-primary text-white font-bold py-4 px-4 rounded hover:bg-orange-600 transition-colors mt-auto"
+        >
+          {t('pricing.starter_cta')}
+        </a>
+      </div>
+
+      <!-- Strategy Package -->
+      <div class="p-8 bg-white text-text_main rounded shadow-xl relative flex flex-col">
+        <h3 class="text-2xl font-bold mb-2">{t('pricing.strategy_title')}</h3>
+        <div class="mb-6">
+          <span class="text-4xl font-extrabold text-primary">{t('pricing.strategy_price')}</span>
+          {t('pricing.strategy_unit') && (
+            <span class="text-lg text-text_muted font-medium"> {t('pricing.strategy_unit')}</span>
+          )}
+        </div>
+        <ul class="space-y-4 mb-8 text-text_main font-medium flex-grow">
+          <li class="flex items-start">
+            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span set:html={t('pricing.strategy_f1')}></span>
+          </li>
+          <li class="flex items-start">
+            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span set:html={t('pricing.strategy_f2')}></span>
+          </li>
+          <li class="flex items-start">
+            <svg class="w-5 h-5 text-primary mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span set:html={t('pricing.strategy_f3')}></span>
+          </li>
+        </ul>
+        <a
+          href="https://calendly.com/jc-maleysson/30min"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="block w-full text-center bg-white border-2 border-primary text-primary font-bold py-4 px-4 rounded hover:bg-orange-50 transition-colors mt-auto"
+        >
+          {t('pricing.strategy_cta')}
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,31 @@
+---
+import { useTranslations } from '../i18n/translations';
+
+interface Props {
+  lang: 'fr' | 'en';
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<footer class="py-12 px-4 border-t border-border bg-background text-center">
+  <div class="max-w-4xl mx-auto flex flex-col items-center">
+    <a href={lang === 'fr' ? '/' : '/en'} class="inline-block mb-6">
+      <img src="/assets/logo.svg" alt="SDRnow" class="h-8 w-auto" />
+    </a>
+    <div class="text-text_muted text-sm space-y-2">
+      <p>
+        <a href={t('footer.phone_href')} class="hover:text-text_main">
+          {t('footer.phone')}
+        </a>
+      </p>
+      <p>
+        {t('footer.rights')}{' '}
+        <a href={t('footer.legal_href')} class="underline hover:text-text_main">
+          {t('footer.legal')}
+        </a>
+      </p>
+    </div>
+  </div>
+</footer>

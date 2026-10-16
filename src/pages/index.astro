@@ -1,0 +1,25 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Hero from '../components/Hero.astro';
+import SocialProof from '../components/SocialProof.astro';
+import Methodology from '../components/Methodology.astro';
+import Pricing from '../components/Pricing.astro';
+import Footer from '../components/Footer.astro';
+import { useTranslations } from '../i18n/translations';
+
+const t = useTranslations('fr');
+---
+
+<Layout
+  title={t('meta.title')}
+  description={t('meta.description')}
+  lang="fr"
+  alternateHref="/en"
+  alternateLang="en"
+>
+  <Hero lang="fr" />
+  <SocialProof lang="fr" />
+  <Methodology lang="fr" />
+  <Pricing lang="fr" />
+  <Footer lang="fr" />
+</Layout>

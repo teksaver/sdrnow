@@ -1,0 +1,203 @@
+export const languages = {
+  fr: 'Français',
+  en: 'English',
+};
+
+export const defaultLang = 'fr';
+
+export const ui = {
+  fr: {
+    'meta.title': 'SDRnow - Réveillez vos leads dormants',
+    'meta.description': 'Solution d\'externalisation commerciale. Nous transformons vos prospects inexploités en rendez-vous qualifiés dans votre agenda.',
+    'meta.legal_title': 'Mentions Légales - SDRnow',
+
+    // Nav
+    'nav.back_home': 'Retour à l\'accueil',
+
+    // Hero
+    'hero.badge': 'Solution d\'externalisation commerciale',
+    'hero.title_pre': 'Nous transformons vos prospects inexploités',
+    'hero.title_highlight': 'en rendez-vous qualifiés dans votre agenda.',
+    'hero.description': 'Vous devez contacter des leads rapidement avant qu’ils ne se dirigent vers la concurrence ? Des prospects dormants s’empilent dans votre CRM ? Besoin d’alimenter votre tunnel de vente avec une campagne de prospection multicanale ? Une nouvelle offre à tester auprès d’un échantillon de vos fichiers clients ?',
+    'hero.cta': 'Je prends rendez-vous',
+    'hero.sub_cta': 'Échange de 30 min • Sans engagement',
+
+    // Social Proof
+    'proof.title': 'La preuve par l\'exemple',
+    'proof.subtitle': 'Cas d\'usage réel d\'une campagne de réactivation sur un portefeuille de leads inexploités.',
+    'proof.stat1_value': '+400%',
+    'proof.stat1_label': 'De croissance de revenus générés en 6 mois',
+    'proof.stat2_value': '+1800',
+    'proof.stat2_label': 'Leads dormants mis à jour dans le CRM le 1er mois',
+    'proof.stat3_value': '3 / jour',
+    'proof.stat3_label': 'Obtention de rendez-vous qualifiés dès la 1ère semaine',
+    'proof.stat4_value': '20%',
+    'proof.stat4_label': 'Taux de conversion final par les équipes Sales',
+
+    // Methodology
+    'method.heading': 'Notre force ? Détecter le moment de la relation client où seul un point de contact humain, incarné et authentique, va créer la réassurance nécessaire.',
+    'method.step1_title': 'Audit & Scénarisation',
+    'method.step1_desc': 'Nous identifions les poches de valeur dans votre CRM et nous concevons une arborescence sur-mesure.',
+    'method.step1_item1': 'Activation de vos prospects dormants',
+    'method.step1_item2': 'Alignement sur votre ligne éditoriale et votre image de marque',
+    'method.step1_item3': 'Création d\'un dataset homogène',
+
+    'method.step2_title': 'Exécution Multicanale',
+    'method.step2_desc': 'Maillage d’une campagne commerciale multicanale pour atteindre votre audience selon ses préférences',
+    'method.step2_item1': 'Phoning : Pitch et messages vocaux',
+    'method.step2_item2': 'Mailing : Doublage avec lien agenda',
+    'method.step2_item3': 'Réseaux sociaux : Triplage sur les réseaux sociaux',
+
+    'method.step3_title': 'Closing & Accélération',
+    'method.step3_desc': 'Vos commerciaux se concentrent uniquement sur les gestes à forte valeur ajoutée.',
+    'method.step3_item1': 'Alimentation de l’agenda de vos commerciaux par des rendez-vous hyper-qualifiés pour des démonstrations ou du closing.',
+    'method.step3_item2': 'Progression des leads dans le funnel',
+    'method.step3_item3': 'Surcroît de ciblage de vos prochaines campagnes marketing grâce au nettoyage du CRM',
+
+    // Pricing
+    'pricing.title': 'Notre proposition pour démarrer ensemble en confiance',
+    'pricing.starter_badge': 'Populaire',
+    'pricing.starter_title': 'Package SDRnow Starter',
+    'pricing.starter_price': '1 990 €',
+    'pricing.starter_unit': 'HT',
+    'pricing.starter_f1': 'Appel de <strong>100 leads</strong> ou prospects issus de vos listes',
+    'pricing.starter_f2': 'Connexion sur votre CRM ou communication de votre listing',
+    'pricing.starter_f3': 'Résultats sous 3 à 5 jours ouvrés (selon taux d\'aboutissement)',
+    'pricing.starter_cta': 'Je prends rendez-vous',
+
+    'pricing.strategy_title': 'Package SDRnow Strategy',
+    'pricing.strategy_price': 'Sur devis',
+    'pricing.strategy_unit': '',
+    'pricing.strategy_f1': 'Audit sur les pratiques de ventes actuelles (Livrable : 1 cahier d’audit)',
+    'pricing.strategy_f2': 'Evolution ou refonte complète du pipe de vente (Livrable : Design du pipe)',
+    'pricing.strategy_f3': 'Exécution des campagnes et stratégie à long terme',
+    'pricing.strategy_cta': 'J’expose mes enjeux',
+
+    // Footer
+    'footer.phone': '06 67 90 24 94',
+    'footer.phone_href': 'tel:0667902494',
+    'footer.rights': '© 2026 SDRnow. Tous droits réservés.',
+    'footer.legal': 'Mentions légales',
+    'footer.legal_href': '/mentions-legales',
+
+    // Legal
+    'legal.title': 'Mentions Légales',
+    'legal.s1_title': '1. Éditeur du site',
+    'legal.s1_intro': 'Le site <strong>sdrnow.fr</strong> est édité par :',
+    'legal.s1_company': 'Nom de la société : Jean-Charles Maleysson EI',
+    'legal.s1_email': 'Email de contact : ',
+    'legal.s1_director': 'Directeur de la publication : Jean-Charles Maleysson',
+
+    'legal.s2_title': '2. Hébergement',
+    'legal.s2_intro': 'Le site est hébergé par :',
+    'legal.s2_company': 'Société : Scaleway SAS',
+    'legal.s2_address': 'Adresse : 8 rue de la Ville l’Evêque, 75008 Paris, France',
+    'legal.s2_website': 'Site web : ',
+
+    'legal.s3_title': '3. Propriété intellectuelle',
+    'legal.s3_text': 'L\'ensemble de ce site relève de la législation française et internationale sur le droit d\'auteur et la propriété intellectuelle. Tous les droits de reproduction sont réservés, y compris pour les documents téléchargeables et les représentations iconographiques et photographiques.',
+
+    'legal.s4_title': '4. Données personnelles',
+    'legal.s4_text': 'Le site sdrnow.fr ne collecte aucune donnée personnelle à l\'insu des utilisateurs. La prise de rendez-vous est gérée par la plateforme tierce Calendly, soumise à sa propre politique de confidentialité.',
+  },
+  en: {
+    'meta.title': 'SDRnow - Reawaken Your Dormant Leads',
+    'meta.description': 'Sales outsourcing solution. We turn your untapped prospects into qualified meetings directly in your calendar.',
+    'meta.legal_title': 'Legal Notice - SDRnow',
+
+    // Nav
+    'nav.back_home': 'Back to home',
+
+    // Hero
+    'hero.badge': 'Sales Outsourcing Solution',
+    'hero.title_pre': 'We turn your untapped prospects',
+    'hero.title_highlight': 'into qualified meetings in your calendar.',
+    'hero.description': 'Need to contact leads quickly before they head to the competition? Dormant prospects piling up in your CRM? Looking to fuel your sales pipeline with a multichannel outreach campaign? A new offer to test on a customer segment?',
+    'hero.cta': 'Book a Meeting',
+    'hero.sub_cta': '30-minute discovery call • No commitment',
+
+    // Social Proof
+    'proof.title': 'Proven by Results',
+    'proof.subtitle': 'Real-world case study: reactivating an untapped prospect database.',
+    'proof.stat1_value': '+400%',
+    'proof.stat1_label': 'Revenue growth generated within 6 months',
+    'proof.stat2_value': '+1,800',
+    'proof.stat2_label': 'Dormant leads updated in CRM within month 1',
+    'proof.stat3_value': '3 / day',
+    'proof.stat3_label': 'Qualified meetings booked starting in week 1',
+    'proof.stat4_value': '20%',
+    'proof.stat4_label': 'Final conversion rate by sales teams',
+
+    // Methodology
+    'method.heading': 'Our core strength? Identifying the key customer touchpoint where only an authentic, human connection builds lasting trust.',
+    'method.step1_title': 'Audit & Scenario Design',
+    'method.step1_desc': 'We uncover untapped value in your CRM and design a customized outreach sequence.',
+    'method.step1_item1': 'Reactivation of your dormant prospects',
+    'method.step1_item2': 'Strict alignment with your tone of voice and brand identity',
+    'method.step1_item3': 'Building a clean, unified dataset',
+
+    'method.step2_title': 'Multichannel Execution',
+    'method.step2_desc': 'Orchestrating a multichannel outreach campaign to reach your audience through their preferred channels',
+    'method.step2_item1': 'Cold calling: Tailored pitch & voice messages',
+    'method.step2_item2': 'Emailing: Follow-ups with booking link',
+    'method.step2_item3': 'Social selling: Multi-touch engagement on social networks',
+
+    'method.step3_title': 'Closing & Acceleration',
+    'method.step3_desc': 'Your sales reps focus exclusively on high-value closing activities.',
+    'method.step3_item1': 'Filling your sales team\'s calendar with high-intent demo and closing calls.',
+    'method.step3_item2': 'Accelerating lead progression down the sales funnel.',
+    'method.step3_item3': 'Enhanced targeting for future marketing campaigns thanks to clean CRM data.',
+
+    // Pricing
+    'pricing.title': 'Our plans to start working together with confidence',
+    'pricing.starter_badge': 'Popular',
+    'pricing.starter_title': 'Package SDRnow Starter',
+    'pricing.starter_price': '€1,990',
+    'pricing.starter_unit': 'excl. VAT',
+    'pricing.starter_f1': 'Calling <strong>100 leads</strong> or prospects from your lists',
+    'pricing.starter_f2': 'Direct CRM integration or secure list upload',
+    'pricing.starter_f3': 'Results delivered within 3 to 5 business days (based on reach rate)',
+    'pricing.starter_cta': 'Book a Meeting',
+
+    'pricing.strategy_title': 'Package SDRnow Strategy',
+    'pricing.strategy_price': 'Custom Quote',
+    'pricing.strategy_unit': '',
+    'pricing.strategy_f1': 'In-depth sales audit of current practices (Deliverable: 1 Audit Report)',
+    'pricing.strategy_f2': 'Sales pipeline evolution or complete redesign (Deliverable: Pipeline Blueprint)',
+    'pricing.strategy_f3': 'Long-term outreach campaign execution and growth strategy',
+    'pricing.strategy_cta': 'Discuss My Challenges',
+
+    // Footer
+    'footer.phone': '+33 6 67 90 24 94',
+    'footer.phone_href': 'tel:+33667902494',
+    'footer.rights': '© 2026 SDRnow. All rights reserved.',
+    'footer.legal': 'Legal Notice',
+    'footer.legal_href': '/en/legal-notice',
+
+    // Legal
+    'legal.title': 'Legal Notice',
+    'legal.s1_title': '1. Website Publisher',
+    'legal.s1_intro': 'The website <strong>sdrnow.fr</strong> is published by:',
+    'legal.s1_company': 'Company name: Jean-Charles Maleysson EI',
+    'legal.s1_email': 'Contact email: ',
+    'legal.s1_director': 'Publication Director: Jean-Charles Maleysson',
+
+    'legal.s2_title': '2. Hosting',
+    'legal.s2_intro': 'The website is hosted by:',
+    'legal.s2_company': 'Company: Scaleway SAS',
+    'legal.s2_address': 'Address: 8 rue de la Ville l’Evêque, 75008 Paris, France',
+    'legal.s2_website': 'Website: ',
+
+    'legal.s3_title': '3. Intellectual Property',
+    'legal.s3_text': 'This entire website is governed by French and international legislation on copyright and intellectual property. All reproduction rights are reserved, including for downloadable documents and iconographic and photographic representations.',
+
+    'legal.s4_title': '4. Personal Data',
+    'legal.s4_text': 'The sdrnow.fr website does not collect any personal data without users\' knowledge. Meeting scheduling is managed by the third-party platform Calendly, subject to its own privacy policy.',
+  },
+} as const;
+
+export function useTranslations(lang: keyof typeof ui) {
+  return function t(key: keyof typeof ui[typeof defaultLang]): string {
+    return ui[lang][key] || ui[defaultLang][key];
+  };
+}
