@@ -1,6 +1,6 @@
 name: Deploy SDRnow Landing Page
 
-on:
+'on':
   push:
     branches:
       - main
@@ -142,16 +142,15 @@ jobs:
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo cp /tmp/sdrnow-staging.service /etc/systemd/system/sdrnow-staging.service && sudo systemctl daemon-reload && sudo systemctl enable sdrnow-staging.service && rm /tmp/sdrnow-staging.service"
 
           # 8. Provisionner le fichier d'environnement /etc/sdrnow/staging.env
-          cat << 'EOF' > /tmp/staging.env
-ADMIN_USER=admin
-ADMIN_PASS_SHA256=${{ env.ADMIN_PASS_SHA256 }}
-STAGING_PREVIEW_SECRET=${{ secrets.STAGING_PREVIEW_SECRET || 'sdrnow-staging-preview-secret-key' }}
-GITHUB_PAT=${{ secrets.PAT_GITHUB || secrets.GITHUB_TOKEN }}
-GITHUB_REPO=${{ github.repository }}
-STAGING_DIR=/var/www/staging
-PROD_DIR=/var/www/html
-EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js
-EOF
+          printf "%s\n" \
+            "ADMIN_USER=admin" \
+            "ADMIN_PASS_SHA256=${{ env.ADMIN_PASS_SHA256 }}" \
+            "STAGING_PREVIEW_SECRET=${{ secrets.STAGING_PREVIEW_SECRET || 'sdrnow-staging-preview-secret-key' }}" \
+            "GITHUB_PAT=${{ secrets.PAT_GITHUB || secrets.GITHUB_TOKEN }}" \
+            "GITHUB_REPO=${{ github.repository }}" \
+            "STAGING_DIR=/var/www/staging" \
+            "PROD_DIR=/var/www/html" \
+            "EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js" > /tmp/staging.env
           scp $SSH_OPTS /tmp/staging.env deploy@$SERVER_IP:/tmp/staging.env
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /etc/sdrnow && sudo cp /tmp/staging.env /etc/sdrnow/staging.env && sudo chmod 0600 /etc/sdrnow/staging.env && sudo chown caddy:caddy /etc/sdrnow/staging.env && rm /tmp/staging.env"
 
