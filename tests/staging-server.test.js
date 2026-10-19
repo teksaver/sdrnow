@@ -257,6 +257,21 @@ test('Server: Gatekeeper authentication logic (AD-7)', async () => {
     assert.equal(res3.statusCode, 200);
     assert.ok(res3.body.includes('<script src="/__editor.js"></script>'));
 
+    // 3b. Valid Basic Auth with "client" when adminUser is "client,admin"
+    const handlerMulti = createRequestHandler({
+      stagingDir,
+      prodDir,
+      adminUser: 'client,admin',
+      adminPassSha256: TEST_ADMIN_PASS_SHA256,
+      secret: TEST_SECRET,
+    });
+    const clientAuth = Buffer.from(`client:${TEST_ADMIN_PASS}`).toString('base64');
+    const resClient = await mockRequest(handlerMulti, '/', {
+      headers: { Authorization: `Basic ${clientAuth}` },
+    });
+    assert.equal(resClient.statusCode, 200);
+    assert.ok(resClient.body.includes('<script src="/__editor.js"></script>'));
+
     // 4. Invalid or Expired preview token -> 403 Expired Preview Gate (NO WWW-Authenticate!)
     const res4 = await mockRequest(handler, '/?preview=bad-token-1234');
     assert.equal(res4.statusCode, 403);

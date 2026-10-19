@@ -143,7 +143,7 @@ jobs:
 
           # 8. Provisionner le fichier d'environnement /etc/sdrnow/staging.env
           printf "%s\n" \
-            "ADMIN_USER=admin" \
+            "ADMIN_USER=client,admin" \
             "ADMIN_PASS_SHA256=${{ env.ADMIN_PASS_SHA256 }}" \
             "STAGING_PREVIEW_SECRET=${{ secrets.STAGING_PREVIEW_SECRET || 'sdrnow-staging-preview-secret-key' }}" \
             "GITHUB_PAT=${{ secrets.PAT_GITHUB || secrets.GITHUB_TOKEN }}" \
