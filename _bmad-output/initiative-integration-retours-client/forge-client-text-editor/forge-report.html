@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BMad Forge Report — Éditeur Client Bilingue In-Page (SDRnow)</title>
+  <style>
+    :root {
+      --bg: #f8f7f4;
+      --surface: #ffffff;
+      --ink: #18181b;
+      --muted: #52525b;
+      --border: #e4e4e7;
+      --primary: #f26522;
+      --primary-soft: #fff3ed;
+      --seal-red: #b91c1c;
+      --seal-gold: #f59e0b;
+      --green: #15803d;
+      --green-soft: #f0fdf4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 44px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+      position: relative;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 28px;
+      margin-bottom: 32px;
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 28px;
+      line-height: 1.25;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .seal-wrapper {
+      flex-shrink: 0;
+      text-align: center;
+    }
+    h2 {
+      font-size: 19px;
+      margin: 32px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      background: #fafafa;
+    }
+    .card.locked {
+      background: var(--green-soft);
+      border-color: #bbf7d0;
+    }
+    .card.rejected {
+      background: #fef2f2;
+      border-color: #fecaca;
+    }
+    .card.crack {
+      background: var(--primary-soft);
+      border-color: #fed7aa;
+    }
+    .card h3 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+    }
+    .card p {
+      margin: 0;
+      font-size: 14px;
+      color: #27272a;
+    }
+    code {
+      background: rgba(0, 0, 0, 0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .roster {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .persona {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .persona-icon {
+      font-size: 22px;
+      line-height: 1;
+      padding: 8px;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+    .persona-name {
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .persona-role {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .persona-voice {
+      font-size: 12.5px;
+      color: #3f3f46;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="eyebrow">BMad Forge Idea • Initiative : integration-retours-client</div>
+        <h1>Éditeur Client Bilingue In-Page (SDRnow)</h1>
+        <p class="subtitle">
+          Permettre à Jean-Charles d'éditer en autonomie les textes FR/EN avec vraie preview CSS Tailwind, balisage HTML5 sémantique strict (<code>&lt;em&gt;</code> / <code>&lt;strong&gt;</code>), partage Read-Only sur Staging et publication instantanée en Prod.
+        </p>
+      </div>
+      <div class="seal-wrapper" aria-label="Outcome: HARDENED">
+        <!-- Prominent Wax-Seal / Stamp SVG -->
+        <svg width="136" height="136" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="wax" cx="35%" cy="30%" r="70%">
+              <stop offset="0%" stop-color="#ef4444"/>
+              <stop offset="55%" stop-color="#b91c1c"/>
+              <stop offset="100%" stop-color="#7f1d1d"/>
+            </radialGradient>
+          </defs>
+          <path d="M70,6 C82,6 88,13 99,15 C110,17 119,14 126,23 C133,32 127,42 130,53 C133,64 138,72 133,83 C128,94 120,97 115,107 C110,117 110,127 99,131 C88,135 80,129 70,131 C60,133 51,136 41,131 C31,126 31,116 25,107 C19,98 11,94 7,83 C3,72 8,63 11,53 C14,43 8,32 15,23 C22,14 31,17 41,15 C51,13 58,6 70,6 Z" fill="url(#wax)" stroke="#450a0a" stroke-width="2"/>
+          <circle cx="70" cy="70" r="49" fill="none" stroke="#fca5a5" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <circle cx="70" cy="70" r="43" fill="none" stroke="#fef2f2" stroke-width="1.2" opacity="0.6"/>
+          <g transform="rotate(-10 70 70)">
+            <text x="70" y="54" text-anchor="middle" fill="#fef2f2" font-size="9" font-weight="700" letter-spacing="2">BMAD FORGE</text>
+            <rect x="24" y="59" width="92" height="22" rx="4" fill="#7f1d1d" stroke="#fca5a5" stroke-width="1.5"/>
+            <text x="70" y="74" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="900" letter-spacing="2.5">HARDENED</text>
+            <text x="70" y="94" text-anchor="middle" fill="#fde68a" font-size="8.5" font-weight="700" letter-spacing="1.5">OCT 2026 • SDRNOW</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <h2>🔒 Décisions Verrouillées (Locks)</h2>
+    <div class="grid-2">
+      <div class="card locked">
+        <h3>1. Éditeur In-Page sur <code>staging.sdrnow.fr</code></h3>
+        <p>Annotation des composants Astro avec <code>data-i18n</code>. Le client clique sur un texte directement sur la vraie page et voit le rendu Tailwind en temps réel (pleine largeur conservée).</p>
+      </div>
+      <div class="card locked">
+        <h3>2. 1 Unité de sens = 1 Bloc FR/EN</h3>
+        <p>Chaque titre, paragraphe, puce, chiffre KPI ou CTA est un bloc unique (fusion de <code>hero.title_pre</code> + <code>hero.title_highlight</code> en <code>hero.title</code>) pour préserver l'ordre grammatical propre à chaque langue.</p>
+      </div>
+      <div class="card locked">
+        <h3>3. Duo HTML5 Sémantique (<code>&lt;em&gt;</code> &amp; <code>&lt;strong&gt;</code>)</h3>
+        <p>Zéro classe CSS ni <code>&lt;span&gt;</code> dans le JSON. Dans les blocs <code>rich</code>, deux boutons : <code>&lt;em&gt;</code> (emphase d'accroche en orange <code>text-primary not-italic</code>) et <code>&lt;strong&gt;</code> (importance en gras) + <code>&lt;br&gt;</code>. Blocs <code>plain</code> (KPIs, prix, CTA) en texte brut strict.</p>
+      </div>
+      <div class="card locked">
+        <h3>4. Tiroir Bas d'Écran FR/EN &amp; Auto-Switch</h3>
+        <p>Au clic, un tiroir flottant en bas d'écran affiche 🇫🇷 FR et 🇬🇧 EN côte à côte. Le focus dans FR ou EN bascule instantanément la langue de toute la page sous les yeux du client.</p>
+      </div>
+      <div class="card locked">
+        <h3>5. Workflow 2 Paliers + Reset depuis la Prod</h3>
+        <p>Trois actions : <strong>Enregistrer sur Staging</strong> (patch HTML <code>&lt;10ms</code> + commit <code>[skip ci]</code> sur <code>staging</code>), <strong>Publier en Prod</strong> (patch HTML <code>&lt;10ms</code> + commit <code>[skip ci]</code> sur <code>main</code>), et <strong>Réinitialiser le Staging depuis la Prod</strong>.</p>
+      </div>
+      <div class="card locked">
+        <h3>6. Compte Admin + Lien Read-Only (<code>?preview=token</code>)</h3>
+        <p>Staging fermé au public (<code>401/403</code>). Seul le compte <code>admin</code> (Jean-Charles) peut éditer/publier. Il peut copier un lien secret <code>?preview=&lt;token&gt;</code> donnant un accès 100 % lecture seule en 1 clic à ses relecteurs.</p>
+      </div>
+    </div>
+
+    <h2>⚡ Failles Débusquées &amp; Neutralisées (Cracks Survived)</h2>
+    <div class="grid-2">
+      <div class="card crack">
+        <h3>Le « gribouillis » HTML du copier-coller</h3>
+        <p>Un champ <code>contenteditable</code> natif injecte des <code>&lt;span style="..."&gt;</code> lors d'un copier-coller depuis Word/Docs. <strong>Parade :</strong> interception de <code>paste</code> en <code>text/plain</code> et purge serveur stricte.</p>
+      </div>
+      <div class="card crack">
+        <h3>Conflit de Source de Vérité avec <code>deploy.yml</code></h3>
+        <p><code>deploy.yml</code> exécute <code>rm -rf</code> sur le serveur à chaque push Git. <strong>Parade :</strong> le micro-service VPS patche le HTML statique localement ET synchronise <code>src/i18n/translations.json</code> sur GitHub.</p>
+      </div>
+      <div class="card crack">
+        <h3>Race Condition CI/CD au double-clic « Publier »</h3>
+        <p>Si le commit GitHub déclenchait <code>deploy.yml</code>, deux publications rapprochées s'écraseraient mutuellement 2 minutes plus tard. <strong>Parade :</strong> commit automatique tagué <code>[skip ci]</code> puisque le HTML est déjà patché en 5 ms.</p>
+      </div>
+      <div class="card crack">
+        <h3>Fuite de privilèges lors d'une demande d'avis</h3>
+        <p>Partager le même Basic Auth <code>client</code> donnait les droits de mise en prod aux relecteurs. <strong>Parade :</strong> séparation stricte entre session <code>admin</code> (écriture) et jeton <code>?preview=</code> (lecture seule).</p>
+      </div>
+    </div>
+
+    <h2>🚫 Options Rejetées (Rejected)</h2>
+    <div class="grid-2">
+      <div class="card rejected">
+        <h3>Moulinette manuelle par le développeur</h3>
+        <p>Trop frustrant pour le client s'il a déjà fait le travail d'édition et de calage visuel sur Staging.</p>
+      </div>
+      <div class="card rejected">
+        <h3>CMS Tiers (Keystatic, Decap, TinaCMS)</h3>
+        <p>Pas de vraie preview CSS sans dupliquer les composants Astro (Keystatic/Decap), ou pas d'édition FR/EN côte à côte et dépendance SaaS externe (TinaCMS).</p>
+      </div>
+      <div class="card rejected">
+        <h3>1 style = 1 bloc de traduction séparé</h3>
+        <p>Rend la traduction FR/EN impossible quand l'ordre des mots change et empêche le client de déplacer l'accent tonique dans sa phrase.</p>
+      </div>
+      <div class="card rejected">
+        <h3>Syntaxe Markdown visible dans des Textareas</h3>
+        <p>Charge cognitive inutile pour un profil commercial B2B et perte de fidélité visuelle.</p>
+      </div>
+    </div>
+
+    <h2>🎭 Personas ayant mis l'idée à l'épreuve</h2>
+    <div class="roster">
+      <div class="persona">
+        <div class="persona-icon">📋</div>
+        <div>
+          <div class="persona-name">John (BMad Agent)</div>
+          <div class="persona-role">Product Manager</div>
+          <div class="persona-voice">A challengé le Job-to-be-Done initial entre outil de recettage et autonomie de publication en production.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🏗️</div>
+        <div>
+          <div class="persona-name">Winston (BMad Agent)</div>
+          <div class="persona-role">System Architect</div>
+          <div class="persona-voice">A mis en balance les CMS Git standards face à l'architecture statique Astro + Caddy existante.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🎨</div>
+        <div>
+          <div class="persona-name">Sally (BMad Agent)</div>
+          <div class="persona-role">UX Designer</div>
+          <div class="persona-voice">A défini la frontière entre structure de grille verrouillée et liberté d'emphase à l'intérieur d'une phrase.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">💻</div>
+        <div>
+          <div class="persona-name">Amelia (BMad Agent)</div>
+          <div class="persona-role">Senior Software Engineer</div>
+          <div class="persona-voice">A poussé le découplage entre balisage sémantique dans le JSON et classes utilitaires Tailwind.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🎯</div>
+        <div>
+          <div class="persona-name">Yui (Code Review Crew)</div>
+          <div class="persona-role">The Craftsman</div>
+          <div class="persona-voice">A structuré le duo HTML5 <code>&lt;em&gt;</code> + <code>&lt;strong&gt;</code> pour éliminer tout <code>&lt;span&gt;</code> cosmétique.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🔒</div>
+        <div>
+          <div class="persona-name">Vex (Code Review Crew)</div>
+          <div class="persona-role">Security Engineer</div>
+          <div class="persona-voice">A bloqué l'exposition du token GitHub côté client et imposé la séparation Admin vs jeton Read-Only.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">😤</div>
+        <div>
+          <div class="persona-name">Grumbal (Code Review Crew)</div>
+          <div class="persona-role">The Adversary</div>
+          <div class="persona-voice">A identifié la race condition de <code>deploy.yml</code> et imposé le patch HTML 5ms + commit <code>[skip ci]</code>.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🌶️</div>
+        <div>
+          <div class="persona-name">Boundary (Code Review Crew)</div>
+          <div class="persona-role">Edge-Case Hunter</div>
+          <div class="persona-voice">A exigé le bouton « Réinitialiser le Staging depuis la Prod » et l'interdiction des champs vides.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">💼</div>
+        <div>
+          <div class="persona-name">Jean-Charles (Externe)</div>
+          <div class="persona-role">Client &amp; Fondateur SDRnow</div>
+          <div class="persona-voice">A défendu l'usage terrain : zéro Markdown, partage WhatsApp en 1 clic sans popup Basic Auth pour ses pairs.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🧩</div>
+        <div>
+          <div class="persona-name">Chloé (Externe)</div>
+          <div class="persona-role">Intégratrice JAMstack / Astro</div>
+          <div class="persona-voice">A exposé les limites concrètes de Keystatic, Sveltia et TinaCMS sur une landing page bilingue.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🌍</div>
+        <div>
+          <div class="persona-name">Clara (Externe)</div>
+          <div class="persona-role">Traductrice B2B FR/EN</div>
+          <div class="persona-voice">A démontré pourquoi découper une phrase par style ruine la syntaxe anglaise.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">🧹</div>
+        <div>
+          <div class="persona-name">Bastien &amp; Anne-Sophie (Externes)</div>
+          <div class="persona-role">Experts Rich-Text &amp; Standards HTML5</div>
+          <div class="persona-voice">Ont blindé la sanitization du presse-papier (<code>text/plain</code>) et la sémantique WHATWG de <code>&lt;em&gt;</code>/<code>&lt;strong&gt;</code>.</div>
+        </div>
+      </div>
+      <div class="persona">
+        <div class="persona-icon">⚙️</div>
+        <div>
+          <div class="persona-name">Marc &amp; Léa (Externes)</div>
+          <div class="persona-role">DevOps Scaleway &amp; Designer No-Code</div>
+          <div class="persona-voice">Ont conçu la synchro Git sans écrasement et le tiroir bas d'écran préservant les breakpoints Tailwind.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Workspace : <code>_bmad-output/initiative-integration-retours-client/forge-client-text-editor</code></span>
+      <span>Statut : <strong>HARDENED (Complete)</strong></span>
+    </div>
+  </div>
+</body>
+</html>

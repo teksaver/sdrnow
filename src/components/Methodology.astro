@@ -11,43 +11,42 @@ const t = useTranslations(lang);
 
 <section class="py-section px-4 sm:px-6 lg:px-8 bg-surface border-b border-border">
   <div class="max-w-5xl mx-auto">
-    <h2 class="text-3xl font-bold mb-12 text-center">
-      {t('method.heading')}
+    <h2 class="text-3xl font-bold mb-12 text-center [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.heading" data-i18n-type="rich" set:html={t('method.heading')}>
     </h2>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
       <!-- Step 1 -->
       <div class="p-8 bg-white border border-border rounded shadow-sm relative">
         <div class="absolute -top-4 -left-4 w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl border-4 border-surface">1</div>
-        <h3 class="text-xl font-bold mb-3 mt-2">{t('method.step1_title')}</h3>
-        <p class="text-text_muted mb-4">{t('method.step1_desc')}</p>
+        <h3 class="text-xl font-bold mb-3 mt-2 [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step1_title" data-i18n-type="rich" set:html={t('method.step1_title')}></h3>
+        <p class="text-text_muted mb-4 [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step1_desc" data-i18n-type="rich" set:html={t('method.step1_desc')}></p>
         <ul class="text-text_muted space-y-2 list-disc list-inside text-sm">
-          <li>{t('method.step1_item1')}</li>
-          <li>{t('method.step1_item2')}</li>
-          <li>{t('method.step1_item3')}</li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step1_item1" data-i18n-type="rich" set:html={t('method.step1_item1')}></li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step1_item2" data-i18n-type="rich" set:html={t('method.step1_item2')}></li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step1_item3" data-i18n-type="rich" set:html={t('method.step1_item3')}></li>
         </ul>
       </div>
 
       <!-- Step 2 -->
       <div class="p-8 bg-white border border-border rounded shadow-sm relative">
         <div class="absolute -top-4 -left-4 w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl border-4 border-surface">2</div>
-        <h3 class="text-xl font-bold mb-3 mt-2">{t('method.step2_title')}</h3>
-        <p class="text-text_muted mb-4">{t('method.step2_desc')}</p>
+        <h3 class="text-xl font-bold mb-3 mt-2 [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step2_title" data-i18n-type="rich" set:html={t('method.step2_title')}></h3>
+        <p class="text-text_muted mb-4 [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step2_desc" data-i18n-type="rich" set:html={t('method.step2_desc')}></p>
         <ul class="text-text_muted space-y-2 list-disc list-inside text-sm">
-          <li>{t('method.step2_item1')}</li>
-          <li>{t('method.step2_item2')}</li>
-          <li>{t('method.step2_item3')}</li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step2_item1" data-i18n-type="rich" set:html={t('method.step2_item1')}></li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step2_item2" data-i18n-type="rich" set:html={t('method.step2_item2')}></li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step2_item3" data-i18n-type="rich" set:html={t('method.step2_item3')}></li>
         </ul>
       </div>
 
       <!-- Step 3 -->
       <div class="p-8 bg-white border border-border rounded shadow-sm relative">
         <div class="absolute -top-4 -left-4 w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl border-4 border-surface">3</div>
-        <h3 class="text-xl font-bold mb-3 mt-2">{t('method.step3_title')}</h3>
-        <p class="text-text_muted mb-4">{t('method.step3_desc')}</p>
+        <h3 class="text-xl font-bold mb-3 mt-2 [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step3_title" data-i18n-type="rich" set:html={t('method.step3_title')}></h3>
+        <p class="text-text_muted mb-4 [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step3_desc" data-i18n-type="rich" set:html={t('method.step3_desc')}></p>
         <ul class="text-text_muted space-y-2 list-disc list-inside text-sm">
-          <li>{t('method.step3_item1')}</li>
-          <li>{t('method.step3_item2')}</li>
-          <li>{t('method.step3_item3')}</li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step3_item1" data-i18n-type="rich" set:html={t('method.step3_item1')}></li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step3_item2" data-i18n-type="rich" set:html={t('method.step3_item2')}></li>
+          <li class="[&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="method.step3_item3" data-i18n-type="rich" set:html={t('method.step3_item3')}></li>
         </ul>
       </div>
     </div>

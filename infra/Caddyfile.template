@@ -5,10 +5,5 @@ sdrnow.fr, www.sdrnow.fr {
 }
 
 staging.sdrnow.fr {
-    basicauth {
-        client __STAGING_HASH__
-    }
-    root * /var/www/staging
-    try_files {path} {path}/ {path}.html =404
-    file_server
+    reverse_proxy 127.0.0.1:3001
 }

@@ -7,6 +7,8 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+const phoneHref = lang === 'fr' ? 'tel:0667902494' : 'tel:+33667902494';
+const legalHref = lang === 'fr' ? '/mentions-legales' : '/en/legal-notice';
 ---
 
 <footer class="py-12 px-4 border-t border-border bg-background text-center">
@@ -16,14 +18,14 @@ const t = useTranslations(lang);
     </a>
     <div class="text-text_muted text-sm space-y-2">
       <p>
-        <a href={t('footer.phone_href')} class="hover:text-text_main">
-          {t('footer.phone')}
+        <a href={phoneHref} class="hover:text-text_main">
+          <span data-i18n="footer.phone" data-i18n-type="plain">{t('footer.phone')}</span>
         </a>
       </p>
       <p>
-        {t('footer.rights')}{' '}
-        <a href={t('footer.legal_href')} class="underline hover:text-text_main">
-          {t('footer.legal')}
+        <span data-i18n="footer.rights" data-i18n-type="plain">{t('footer.rights')}</span>{' '}
+        <a href={legalHref} class="underline hover:text-text_main">
+          <span data-i18n="footer.legal" data-i18n-type="plain">{t('footer.legal')}</span>
         </a>
       </p>
     </div>
