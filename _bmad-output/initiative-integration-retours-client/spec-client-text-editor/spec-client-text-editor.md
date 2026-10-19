@@ -25,7 +25,7 @@ sources:
 
 - **CAP-2**
   - **intent:** L'administrateur peut appliquer uniquement une emphase d'accroche, une importance forte ou un saut de ligne à l'intérieur des blocs de texte riche, tandis que les blocs de données courtes (KPIs, prix, CTA) restent verrouillés en texte brut.
-  - **success:** Dans un bloc riche, seuls les marqueurs d'emphase orange (`<em>`), de gras (`<strong>`) et de saut de ligne (`<br>`) peuvent être insérés (et tout collage presse-papier est converti en texte brut) ; dans un bloc brut, les boutons de formatage et les sauts de ligne sont inactifs.
+  - **success:** Dans un bloc riche, seuls les marqueurs d'emphase orange (`<em>`), de gras (`<strong>`) et de saut de ligne (`<br>`) peuvent être insérés (et tout collage presse-papier est converti en texte brut) ; un bouton dédié permet de dépouiller instantanément tout marqueur sur la sélection pour la rétablir en texte brut normal ; dans un bloc brut, les boutons de formatage et les sauts de ligne sont inactifs.
 
 - **CAP-3**
   - **intent:** L'administrateur peut enregistrer ses modifications sur l'environnement de staging et copier un lien de partage en lecture seule à usage lié à cette version précise du staging, permettant à un relecteur externe de consulter les versions FR et EN en un clic sans ouvrir le staging au public.

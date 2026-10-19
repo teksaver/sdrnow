@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // --- Configuration & Defaults ---
 const PORT = parseInt(process.env.PORT || '3001', 10);
-const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_USER = process.env.ADMIN_USER || 'client,admin';
 const ADMIN_PASS_SHA256 = process.env.ADMIN_PASS_SHA256 ||
   // Default: SHA-256 of "admin"
   '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
@@ -361,7 +361,13 @@ export function createRequestHandler(options = {}) {
   const editorScriptPath = options.editorScriptPath || EDITOR_SCRIPT_PATH;
 
   // Expected 32-byte buffers for timingSafeEqual
-  const expectedUserHash = crypto.createHash('sha256').update(adminUser, 'utf8').digest();
+  const allowedUsers = String(adminUser)
+    .split(',')
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const expectedUserHashes = allowedUsers.map((u) =>
+    crypto.createHash('sha256').update(u, 'utf8').digest()
+  );
   const expectedPassHash = Buffer.from(adminPassSha256, 'hex');
 
   return async function handleRequest(req, res) {
@@ -385,10 +391,15 @@ export function createRequestHandler(options = {}) {
           const givenUserHash = crypto.createHash('sha256').update(user, 'utf8').digest();
           const givenPassHash = crypto.createHash('sha256').update(pass, 'utf8').digest();
 
+          const isUserValid = expectedUserHashes.some(
+            (expectedHash) =>
+              givenUserHash.length === expectedHash.length &&
+              crypto.timingSafeEqual(givenUserHash, expectedHash)
+          );
+
           if (
-            givenUserHash.length === expectedUserHash.length &&
+            isUserValid &&
             givenPassHash.length === expectedPassHash.length &&
-            crypto.timingSafeEqual(givenUserHash, expectedUserHash) &&
             crypto.timingSafeEqual(givenPassHash, expectedPassHash)
           ) {
             isAdmin = true;
@@ -605,9 +616,23 @@ export function createRequestHandler(options = {}) {
       // POST /api/reset
       if (req.method === 'POST' && pathname === '/api/reset') {
         const prodTransFile = path.join(prodDir, 'translations.json');
+        const transFile = path.join(stagingDir, 'translations.json');
         let prodData;
         try {
-          prodData = JSON.parse(fs.readFileSync(prodTransFile, 'utf8'));
+          if (fs.existsSync(prodTransFile)) {
+            prodData = JSON.parse(fs.readFileSync(prodTransFile, 'utf8'));
+          } else if (fs.existsSync(transFile)) {
+            // Cold start fallback: Production has not yet been deployed with translations.json.
+            // Initialize prod translations.json from staging baseline so reset does not crash.
+            prodData = JSON.parse(fs.readFileSync(transFile, 'utf8'));
+            try {
+              atomicWriteFileSync(prodTransFile, JSON.stringify(prodData, null, 2));
+            } catch {
+              // Ignore write error if prodDir is not writable in isolated test environments
+            }
+          } else {
+            throw new Error(`Neither ${prodTransFile} nor ${transFile} exists.`);
+          }
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(
@@ -619,7 +644,6 @@ export function createRequestHandler(options = {}) {
         }
 
         const prodJsonStr = JSON.stringify(prodData, null, 2);
-        const transFile = path.join(stagingDir, 'translations.json');
 
         // Copy prod to staging (<10ms)
         incrementRevision(stagingDir);
