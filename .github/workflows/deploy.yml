@@ -10,6 +10,9 @@ on:
       - main
       - staging
 
+permissions:
+  contents: write
+
 jobs:
   validate:
     name: Validate OpenTofu & Astro Build
@@ -36,6 +39,9 @@ jobs:
 
       - name: Build Astro site
         run: npm run build
+
+      - name: Run Backend Tests
+        run: node --test tests/staging-server.test.js
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v1
@@ -87,10 +93,14 @@ jobs:
         run: tofu init
         working-directory: ./infra
 
-      - name: Generate Password Hash
+      - name: Generate Password Hashes
+        env:
+          STAGING_PASS: ${{ secrets.STAGING_PASSWORD }}
         run: |
-          HASH=$(docker run --rm caddy caddy hash-password --plaintext "${{ secrets.STAGING_PASSWORD }}")
+          HASH=$(docker run --rm caddy caddy hash-password --plaintext "$STAGING_PASS")
           echo "STAGING_PASSWORD_HASH=$HASH" >> $GITHUB_ENV
+          ADMIN_HASH=$(node -e "const crypto = require('crypto'); process.stdout.write(crypto.createHash('sha256').update(process.env.STAGING_PASS || '').digest('hex'));")
+          echo "ADMIN_PASS_SHA256=$ADMIN_HASH" >> $GITHUB_ENV
 
       - name: OpenTofu Apply
         run: tofu apply -auto-approve
@@ -115,20 +125,37 @@ jobs:
           
           # 3. Attendre que cloud-init ait terminé
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo cloud-init status --wait || true"
-          
-          # 4. Préparer le fichier Caddyfile localement avec le hash
-          node -e "
-          const fs = require('fs');
-          let tpl = fs.readFileSync('Caddyfile.template', 'utf8');
-          tpl = tpl.replace('__STAGING_HASH__', () => process.env.STAGING_PASSWORD_HASH);
-          fs.writeFileSync('/tmp/Caddyfile', tpl);
-          "
 
-          # 5. Déployer la configuration Caddy
-          scp $SSH_OPTS /tmp/Caddyfile deploy@$SERVER_IP:/tmp/Caddyfile
+          # 4. Déployer la configuration Caddy
+          scp $SSH_OPTS Caddyfile.template deploy@$SERVER_IP:/tmp/Caddyfile
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html /var/www/staging && sudo cp /tmp/Caddyfile /etc/caddy/Caddyfile && rm /tmp/Caddyfile && (sudo systemctl reload caddy 2>/dev/null || true)"
 
-          # 6. Déterminer le dossier de destination selon la branche
+          # 5. Installer Node 20 si non présent (idempotent)
+          ssh $SSH_OPTS deploy@$SERVER_IP "if ! command -v node >/dev/null 2>&1; then curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs; fi"
+
+          # 6. Déployer staging-server.js et editor-client.js dans /opt/sdrnow/
+          scp $SSH_OPTS staging-server.js editor-client.js deploy@$SERVER_IP:/tmp/
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /opt/sdrnow && sudo cp /tmp/staging-server.js /tmp/editor-client.js /opt/sdrnow/ && sudo chown -R caddy:caddy /opt/sdrnow && rm -f /tmp/staging-server.js /tmp/editor-client.js"
+
+          # 7. Configurer et déployer l'unité systemd
+          scp $SSH_OPTS sdrnow-staging.service deploy@$SERVER_IP:/tmp/sdrnow-staging.service
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo cp /tmp/sdrnow-staging.service /etc/systemd/system/sdrnow-staging.service && sudo systemctl daemon-reload && sudo systemctl enable sdrnow-staging.service && rm /tmp/sdrnow-staging.service"
+
+          # 8. Provisionner le fichier d'environnement /etc/sdrnow/staging.env
+          cat << 'EOF' > /tmp/staging.env
+ADMIN_USER=admin
+ADMIN_PASS_SHA256=${{ env.ADMIN_PASS_SHA256 }}
+STAGING_PREVIEW_SECRET=${{ secrets.STAGING_PREVIEW_SECRET || 'sdrnow-staging-preview-secret-key' }}
+GITHUB_PAT=${{ secrets.PAT_GITHUB || secrets.GITHUB_TOKEN }}
+GITHUB_REPO=${{ github.repository }}
+STAGING_DIR=/var/www/staging
+PROD_DIR=/var/www/html
+EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js
+EOF
+          scp $SSH_OPTS /tmp/staging.env deploy@$SERVER_IP:/tmp/staging.env
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /etc/sdrnow && sudo cp /tmp/staging.env /etc/sdrnow/staging.env && sudo chmod 0600 /etc/sdrnow/staging.env && sudo chown caddy:caddy /etc/sdrnow/staging.env && rm /tmp/staging.env"
+
+          # 9. Déterminer le dossier de destination selon la branche
           if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
             TARGET_DIR="/var/www/staging"
             echo "Deploying to STAGING ($TARGET_DIR)..."
@@ -137,8 +164,8 @@ jobs:
             echo "Deploying to PRODUCTION ($TARGET_DIR)..."
           fi
 
-          # 7. Copier le build Astro généré dans dist
+          # 10. Copier le build Astro généré dans dist
           ssh $SSH_OPTS deploy@$SERVER_IP "mkdir -p /tmp/dist_files"
           scp $SSH_OPTS -r ../dist/* deploy@$SERVER_IP:/tmp/dist_files/
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p $TARGET_DIR && sudo rm -rf $TARGET_DIR/* && sudo cp -r /tmp/dist_files/* $TARGET_DIR/ && sudo chmod -R a+rX /var/www/ && (sudo chown -R caddy:caddy /var/www/ 2>/dev/null || sudo chown -R www-data:www-data /var/www/ 2>/dev/null || true) && (sudo systemctl reload caddy 2>/dev/null || true) && rm -rf /tmp/dist_files"
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p $TARGET_DIR && sudo rm -rf $TARGET_DIR/* && sudo cp -r /tmp/dist_files/* $TARGET_DIR/ && sudo chmod -R a+rX /var/www/ && (sudo chown -R caddy:caddy /var/www/ 2>/dev/null || true) && (sudo systemctl reload caddy 2>/dev/null || true) && (sudo systemctl restart sdrnow-staging.service 2>/dev/null || true) && rm -rf /tmp/dist_files"
         working-directory: ./infra

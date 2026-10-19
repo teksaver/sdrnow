@@ -1,0 +1,21 @@
+[Unit]
+Description=SDRnow Staging Server & Publishing Micro-service
+After=network.target
+
+[Service]
+Type=simple
+User=caddy
+Group=caddy
+WorkingDirectory=/var/www/staging
+Environment=STAGING_DIR=/var/www/staging
+Environment=PROD_DIR=/var/www/html
+Environment=EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js
+EnvironmentFile=-/etc/sdrnow/staging.env
+ExecStart=/usr/bin/node /opt/sdrnow/staging-server.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

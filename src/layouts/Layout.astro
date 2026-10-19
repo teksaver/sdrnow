@@ -5,6 +5,7 @@ interface Props {
   lang?: 'fr' | 'en';
   alternateHref?: string;
   alternateLang?: string;
+  titleKey?: string;
 }
 
 const {
@@ -13,6 +14,7 @@ const {
   lang = 'fr',
   alternateHref,
   alternateLang,
+  titleKey = 'meta.title',
 } = Astro.props;
 
 const canonicalUrl = new URL(Astro.url.pathname, 'https://sdrnow.fr').href;
@@ -23,8 +25,8 @@ const canonicalUrl = new URL(Astro.url.pathname, 'https://sdrnow.fr').href;
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{title}</title>
-  <meta name="description" content={description} />
+  <title data-i18n={titleKey}>{title}</title>
+  <meta name="description" content={description} data-i18n-content="meta.description" />
   <link rel="canonical" href={canonicalUrl} />
   {alternateHref && alternateLang && (
     <link rel="alternate" hreflang={alternateLang} href={new URL(alternateHref, 'https://sdrnow.fr').href} />

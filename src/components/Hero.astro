@@ -37,15 +37,12 @@ const t = useTranslations(lang);
         <img src="/assets/logo.svg" alt="SDRnow" class="h-10 sm:h-12 w-auto mx-auto" />
       </a>
     </div>
-    <span class="text-primary font-bold tracking-wider uppercase text-sm mb-4 block">
+    <span class="text-primary font-bold tracking-wider uppercase text-sm mb-4 block" data-i18n="hero.badge" data-i18n-type="plain">
       {t('hero.badge')}
     </span>
-    <h1 class="text-4xl md:text-6xl font-extrabold mb-6 text-text_main tracking-tight leading-tight">
-      {t('hero.title_pre')}<br />
-      <span class="text-primary">{t('hero.title_highlight')}</span>
+    <h1 class="text-4xl md:text-6xl font-extrabold mb-6 text-text_main tracking-tight leading-tight [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="hero.title" data-i18n-type="rich" set:html={t('hero.title')}>
     </h1>
-    <p class="text-xl text-text_muted mb-10 max-w-2xl mx-auto whitespace-pre-line">
-      {t('hero.description')}
+    <p class="text-xl text-text_muted mb-10 max-w-2xl mx-auto whitespace-pre-line [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="hero.description" data-i18n-type="rich" set:html={t('hero.description')}>
     </p>
     <div class="flex flex-col items-center">
       <a
@@ -53,10 +50,12 @@ const t = useTranslations(lang);
         target="_blank"
         rel="noopener noreferrer"
         class="inline-block bg-primary text-white font-bold text-lg py-4 px-10 rounded shadow-lg hover:bg-orange-600 transition-all transform hover:-translate-y-1"
+        data-i18n="hero.cta"
+        data-i18n-type="plain"
       >
         {t('hero.cta')}
       </a>
-      <span class="text-sm text-text_muted mt-3 font-medium">
+      <span class="text-sm text-text_muted mt-3 font-medium" data-i18n="hero.sub_cta" data-i18n-type="plain">
         {t('hero.sub_cta')}
       </span>
     </div>
