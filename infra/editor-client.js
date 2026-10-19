@@ -245,6 +245,53 @@
     activeInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  // --- Clear Formatting Helper (Reset to Normal Plain Text) ---
+  function clearFormat() {
+    const activeInput = (document.activeElement && document.activeElement.classList.contains('sdrnow-input-area'))
+      ? document.activeElement
+      : (state.lastActiveInput || document.getElementById(`sdrnow-input-${state.currentLang}`));
+
+    if (!activeInput) return;
+    activeInput.focus();
+
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+
+    if (!range.collapsed) {
+      // Extract contents and strip strong, em, b, i tags while preserving br and text
+      const fragment = range.extractContents();
+      const div = document.createElement('div');
+      div.appendChild(fragment);
+
+      div.querySelectorAll('strong, em, b, i').forEach((el) => {
+        const textNode = document.createTextNode(el.textContent || '');
+        el.parentNode.replaceChild(textNode, el);
+      });
+
+      // Insert cleaned text back
+      const cleanFrag = document.createDocumentFragment();
+      while (div.firstChild) {
+        cleanFrag.appendChild(div.firstChild);
+      }
+      range.insertNode(cleanFrag);
+    } else {
+      // If cursor is within a formatted tag, unwrap that tag
+      let parent = selection.anchorNode;
+      while (parent && parent !== activeInput) {
+        if (parent.nodeName && ['strong', 'em', 'b', 'i'].includes(parent.nodeName.toLowerCase())) {
+          const textNode = document.createTextNode(parent.textContent || '');
+          parent.parentNode.replaceChild(textNode, parent);
+          break;
+        }
+        parent = parent.parentNode;
+      }
+    }
+
+    updateFormatButtonAria();
+    activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   // --- Create In-Page Editor UI ---
   function createUI() {
     // 1. Top Admin Pill
@@ -347,6 +394,9 @@
           <button id="sdrnow-btn-em" type="button" aria-pressed="false" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.primary}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
             🔶 Emphase Orange
           </button>
+          <button id="sdrnow-btn-normal" type="button" title="Supprimer le formatage sur la sélection (Cmd/Ctrl + \)" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.chromeMuted}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 500; cursor: pointer;">
+            ⊘ Texte Normal
+          </button>
           <span id="sdrnow-plain-badge" style="display: none; font-size: 12px; color: ${TOKENS.chromeMuted};">
             🔒 Texte brut (sans style ni retour à la ligne)
           </span>
@@ -419,6 +469,7 @@
   function openDrawerForKey(key) {
     const btnBold = document.getElementById('sdrnow-btn-bold');
     const btnEm = document.getElementById('sdrnow-btn-em');
+    const btnNormal = document.getElementById('sdrnow-btn-normal');
     const inputFr = document.getElementById('sdrnow-input-fr');
     const inputEn = document.getElementById('sdrnow-input-en');
     const drawer = document.getElementById('sdrnow-bottom-drawer');
@@ -436,11 +487,13 @@
     if (fieldDef.type === 'rich') {
       btnBold.style.display = 'inline-block';
       btnEm.style.display = 'inline-block';
+      if (btnNormal) btnNormal.style.display = 'inline-block';
       btnEm.textContent = (key === 'pricing.title') ? '🔶 Emphase Soulignée' : '🔶 Emphase Orange';
       document.getElementById('sdrnow-plain-badge').style.display = 'none';
     } else {
       btnBold.style.display = 'none';
       btnEm.style.display = 'none';
+      if (btnNormal) btnNormal.style.display = 'none';
       document.getElementById('sdrnow-plain-badge').style.display = 'inline-block';
     }
 
@@ -654,7 +707,15 @@
     btnBold.addEventListener('click', () => toggleFormat('strong'));
     btnEm.addEventListener('click', () => toggleFormat('em'));
 
-    // 8. Keyboard Interceptions (Paste, Enter, Cmd+B/I/U)
+    const btnNormal = document.getElementById('sdrnow-btn-normal');
+    if (btnNormal) {
+      btnNormal.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+      });
+      btnNormal.addEventListener('click', () => clearFormat());
+    }
+
+    // 8. Keyboard Interceptions (Paste, Enter, Cmd+B/I/U/Slash)
     [inputFr, inputEn].forEach((input) => {
       // Force text/plain on paste and strip newlines on plain mode
       input.addEventListener('paste', (e) => {
@@ -690,6 +751,15 @@
           e.preventDefault();
           if (state.activeType === 'rich') {
             toggleFormat('em');
+          }
+          return;
+        }
+
+        // Cmd/Ctrl + \ : Clear formatting
+        if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+          e.preventDefault();
+          if (state.activeType === 'rich') {
+            clearFormat();
           }
           return;
         }

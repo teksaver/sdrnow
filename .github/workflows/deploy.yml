@@ -166,5 +166,5 @@ jobs:
           # 10. Copier le build Astro généré dans dist
           ssh $SSH_OPTS deploy@$SERVER_IP "mkdir -p /tmp/dist_files"
           scp $SSH_OPTS -r ../dist/* deploy@$SERVER_IP:/tmp/dist_files/
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p $TARGET_DIR && sudo rm -rf $TARGET_DIR/* && sudo cp -r /tmp/dist_files/* $TARGET_DIR/ && sudo chmod -R a+rX /var/www/ && (sudo chown -R caddy:caddy /var/www/ 2>/dev/null || true) && (sudo systemctl reload caddy 2>/dev/null || true) && (sudo systemctl restart sdrnow-staging.service 2>/dev/null || true) && rm -rf /tmp/dist_files"
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p $TARGET_DIR && sudo rm -rf $TARGET_DIR/* && sudo cp -r /tmp/dist_files/* $TARGET_DIR/ && if [ ! -f /var/www/html/translations.json ]; then sudo cp /tmp/dist_files/translations.json /var/www/html/translations.json && sudo chown caddy:caddy /var/www/html/translations.json; fi && sudo chmod -R a+rX /var/www/ && (sudo chown -R caddy:caddy /var/www/ 2>/dev/null || true) && (sudo systemctl reload caddy 2>/dev/null || true) && (sudo systemctl restart sdrnow-staging.service 2>/dev/null || true) && rm -rf /tmp/dist_files"
         working-directory: ./infra

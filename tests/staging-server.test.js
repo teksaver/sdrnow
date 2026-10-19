@@ -591,10 +591,10 @@ test('Server: Access control on /__editor.js (admin only)', async () => {
   }
 });
 
-test('Server: POST /api/reset returns 500 when prod translations.json is missing', async () => {
+test('Server: POST /api/reset gracefully falls back when prod translations.json is missing', async () => {
   const { baseTmp, stagingDir, prodDir } = setupTestDirs();
 
-  // Delete prod translations.json
+  // Delete prod translations.json (simulating cold start before prod deployment)
   fs.unlinkSync(path.join(prodDir, 'translations.json'));
 
   const handler = createRequestHandler({
@@ -608,6 +608,7 @@ test('Server: POST /api/reset returns 500 when prod translations.json is missing
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
 
   try {
+    // 1. Staging exists, prod missing -> succeeds with 202 and initializes prod
     const res = await mockRequest(handler, '/api/reset', {
       method: 'POST',
       headers: {
@@ -616,9 +617,25 @@ test('Server: POST /api/reset returns 500 when prod translations.json is missing
       },
       body: {},
     });
-    assert.equal(res.statusCode, 500);
+    assert.equal(res.statusCode, 202);
     const json = JSON.parse(res.body);
-    assert.equal(json.error, 'prod_read_failed');
+    assert.equal(json.status, 'accepted');
+    assert.ok(fs.existsSync(path.join(prodDir, 'translations.json')));
+
+    // 2. Both missing -> 500
+    fs.unlinkSync(path.join(stagingDir, 'translations.json'));
+    fs.unlinkSync(path.join(prodDir, 'translations.json'));
+    const resFail = await mockRequest(handler, '/api/reset', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${adminAuth}`,
+        'Content-Type': 'application/json',
+      },
+      body: {},
+    });
+    assert.equal(resFail.statusCode, 500);
+    const jsonFail = JSON.parse(resFail.body);
+    assert.equal(jsonFail.error, 'prod_read_failed');
   } finally {
     cleanupDirs(baseTmp);
   }

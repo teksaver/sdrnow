@@ -616,9 +616,23 @@ export function createRequestHandler(options = {}) {
       // POST /api/reset
       if (req.method === 'POST' && pathname === '/api/reset') {
         const prodTransFile = path.join(prodDir, 'translations.json');
+        const transFile = path.join(stagingDir, 'translations.json');
         let prodData;
         try {
-          prodData = JSON.parse(fs.readFileSync(prodTransFile, 'utf8'));
+          if (fs.existsSync(prodTransFile)) {
+            prodData = JSON.parse(fs.readFileSync(prodTransFile, 'utf8'));
+          } else if (fs.existsSync(transFile)) {
+            // Cold start fallback: Production has not yet been deployed with translations.json.
+            // Initialize prod translations.json from staging baseline so reset does not crash.
+            prodData = JSON.parse(fs.readFileSync(transFile, 'utf8'));
+            try {
+              atomicWriteFileSync(prodTransFile, JSON.stringify(prodData, null, 2));
+            } catch {
+              // Ignore write error if prodDir is not writable in isolated test environments
+            }
+          } else {
+            throw new Error(`Neither ${prodTransFile} nor ${transFile} exists.`);
+          }
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(
@@ -630,7 +644,6 @@ export function createRequestHandler(options = {}) {
         }
 
         const prodJsonStr = JSON.stringify(prodData, null, 2);
-        const transFile = path.join(stagingDir, 'translations.json');
 
         // Copy prod to staging (<10ms)
         incrementRevision(stagingDir);
