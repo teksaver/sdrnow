@@ -1644,3 +1644,26 @@ test('tracking: daily secret survives a same-day restart (tmpfs file 0600), visi
     ctx.cleanup();
   }
 });
+
+test('tracking: without a TEM key, emails stay dormant (no HTTPS call) while tracking keeps working', async () => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), 'tests', 'tmp-dormant-'));
+  const analyticsFile = path.join(dir, 'analytics.jsonl');
+  fs.writeFileSync(analyticsFile, JSON.stringify({
+    ts: '2026-10-20T10:00:00.000Z', date: '2026-10-20', anon_id: 'a1b2c3d4', slug: null, tier: 3,
+    event: 'init', target: null, duration: null, lang: 'fr', referer: null, ua_family: 'Mac (Chrome)',
+  }) + '\n');
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return { ok: true }; };
+  try {
+    // No sendEmail option and no TEM_SECRET_KEY in the test environment
+    const tracker = createTracker({ analyticsFile, ctaTargets: CTA, alertRecipients: ['jcm@sdrnow.fr'], now: () => Date.parse('2026-10-20T12:00:00Z') });
+    assert.equal(await tracker.sendDigest('2026-10-20'), true, 'the day had a human visitor');
+    await tracker.whenIdle();
+    assert.equal(calls, 0, 'no TEM API call while emails are dormant');
+    tracker.stopTimers();
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

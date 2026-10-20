@@ -1255,6 +1255,8 @@ export function createTracker(options = {}) {
   const ctaTargets = options.ctaTargets || getCtaTargets();
   const recipients = parseRecipients(options.alertRecipients ?? ALERT_EMAIL_TO);
   const sendEmail = options.sendEmail || ((message) => sendTemEmail(message));
+  // Emails stay dormant until a TEM key is provisioned (TEM offer not yet active on the project)
+  const emailEnabled = Boolean(options.sendEmail) || Boolean(TEM_SECRET_KEY && TEM_PROJECT_ID);
   const now = options.now || Date.now;
   const debounceMs = options.debounceMs ?? 120000;
   const statsUrl = options.statsUrl || STATS_URL;
@@ -1341,6 +1343,7 @@ export function createTracker(options = {}) {
   }
 
   function deliver(email) {
+    if (!emailEnabled) return;
     for (const to of recipients) {
       // One individual send per recipient: no recipient ever sees the others
       track(
@@ -2436,6 +2439,9 @@ export function startServer() {
   const runtimeDir = (process.env.RUNTIME_DIRECTORY || '/run/sdrnow').split(':')[0];
   const tracker = createTracker({ secretFile: path.join(runtimeDir, 'daily-secret.json') });
   tracker.startTimers();
+  if (!TEM_SECRET_KEY || !TEM_PROJECT_ID) {
+    console.log('[TEM] Emails désactivés : TEM_SECRET_KEY ou SCW_DEFAULT_PROJECT_ID absent');
+  }
   const server = createServer({ tracker });
   // Loopback only: Caddy (same host) is the sole client, so X-Forwarded-For cannot be forged
   server.listen(PORT, '127.0.0.1', () => {
