@@ -139,7 +139,7 @@
     "legal.s3_title": "3. Propriété intellectuelle",
     "legal.s3_text": "L'ensemble de ce site relève de la législation française et internationale sur le droit d'auteur et la propriété intellectuelle. Tous les droits de reproduction sont réservés, y compris pour les documents téléchargeables et les représentations iconographiques et photographiques.",
     "legal.s4_title": "4. Données personnelles",
-    "legal.s4_text": "Le site sdrnow.fr ne collecte aucune donnée personnelle à l'insu des utilisateurs. La prise de rendez-vous est gérée par la plateforme tierce Calendly, soumise à sa propre politique de confidentialité."
+    "legal.s4_text": "Le site sdrnow.fr ne dépose aucun cookie ni traceur tiers sur votre terminal. Dans le cadre de nos échanges commerciaux B2B (intérêt légitime), la consultation du site depuis un lien de prospection peut être enregistrée côté serveur afin d'assurer le suivi de votre dossier. Vous pouvez exercer vos droits d'accès, d'opposition ou de suppression à tout moment en écrivant à jcm@sdrnow.fr. La prise de rendez-vous est gérée par la plateforme tierce Calendly, soumise à sa propre politique de confidentialité."
   },
   "en": {
     "meta.title": "SDRnow - Reawaken Your Dormant Leads",
@@ -210,6 +210,6 @@
     "legal.s3_title": "3. Intellectual Property",
     "legal.s3_text": "This entire website is governed by French and international legislation on copyright and intellectual property. All reproduction rights are reserved, including for downloadable documents and iconographic and photographic representations.",
     "legal.s4_title": "4. Personal Data",
-    "legal.s4_text": "The sdrnow.fr website does not collect any personal data without users' knowledge. Meeting scheduling is managed by the third-party platform Calendly, subject to its own privacy policy."
+    "legal.s4_text": "The sdrnow.fr website does not place any cookies or third-party trackers on your device. As part of our B2B commercial exchanges (legitimate interest), visits originating from an outreach link may be logged server-side to follow up on your inquiry. You may exercise your rights of access, objection, or deletion at any time by writing to jcm@sdrnow.fr. Meeting scheduling is managed by the third-party platform Calendly, subject to its own privacy policy."
   }
 }

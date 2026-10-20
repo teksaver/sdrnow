@@ -15,6 +15,7 @@ const t = useTranslations(lang);
     <div class="inline-flex items-center space-x-1 text-xs font-semibold bg-white border border-border rounded-full p-1 shadow-sm">
       <a
         href="/"
+        data-lang-switch="fr"
         class={`px-3 py-1 rounded-full transition-colors ${lang === 'fr' ? 'bg-primary text-white' : 'text-text_muted hover:text-text_main'}`}
         aria-label="Version française"
       >
@@ -22,6 +23,7 @@ const t = useTranslations(lang);
       </a>
       <a
         href="/en"
+        data-lang-switch="en"
         class={`px-3 py-1 rounded-full transition-colors ${lang === 'en' ? 'bg-primary text-white' : 'text-text_muted hover:text-text_main'}`}
         aria-label="English version"
       >
@@ -46,7 +48,7 @@ const t = useTranslations(lang);
     </p>
     <div class="flex flex-col items-center">
       <a
-        href="https://calendly.com/jc-maleysson/30min"
+        href={lang === 'fr' ? '/rdv/decouverte' : '/en/book/discovery'}
         target="_blank"
         rel="noopener noreferrer"
         class="inline-block bg-primary text-white font-bold text-lg py-4 px-10 rounded shadow-lg hover:bg-orange-600 transition-all transform hover:-translate-y-1"

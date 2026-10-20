@@ -126,9 +126,8 @@ jobs:
           # 3. Attendre que cloud-init ait terminé
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo cloud-init status --wait || true"
 
-          # 4. Déployer la configuration Caddy
-          scp $SSH_OPTS Caddyfile.template deploy@$SERVER_IP:/tmp/Caddyfile
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html /var/www/staging && sudo cp /tmp/Caddyfile /etc/caddy/Caddyfile && rm /tmp/Caddyfile && (sudo systemctl reload caddy 2>/dev/null || true)"
+          # 4. Préparer les dossiers (la configuration Caddy est déployée après Node, étape 8b)
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html /var/www/staging"
 
           # 5. Installer Node 20 si non présent (idempotent)
           ssh $SSH_OPTS deploy@$SERVER_IP "if ! command -v node >/dev/null 2>&1; then curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs; fi"
@@ -142,6 +141,9 @@ jobs:
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo cp /tmp/sdrnow-staging.service /etc/systemd/system/sdrnow-staging.service && sudo systemctl daemon-reload && sudo systemctl enable sdrnow-staging.service && rm /tmp/sdrnow-staging.service"
 
           # 8. Provisionner le fichier d'environnement /etc/sdrnow/staging.env
+          # TEM_SECRET_KEY = clé IAM dédiée (envoi TEM seul) : la VM ne reçoit jamais SCW_SECRET_KEY
+          TEM_SECRET_KEY=$(tofu output -raw tem_secret_key)
+          echo "::add-mask::$TEM_SECRET_KEY"
           printf "%s\n" \
             "ADMIN_USER=client,admin" \
             "ADMIN_PASS_SHA256=${{ env.ADMIN_PASS_SHA256 }}" \
@@ -150,9 +152,24 @@ jobs:
             "GITHUB_REPO=${{ github.repository }}" \
             "STAGING_DIR=/var/www/staging" \
             "PROD_DIR=/var/www/html" \
-            "EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js" > /tmp/staging.env
+            "EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js" \
+            "TEM_SECRET_KEY=$TEM_SECRET_KEY" \
+            "SCW_DEFAULT_PROJECT_ID=${{ secrets.SCW_DEFAULT_PROJECT_ID }}" \
+            "ALERT_EMAIL_TO=${{ vars.ALERT_EMAIL_TO || secrets.ALERT_EMAIL_TO || 'jcm@sdrnow.fr' }}" \
+            "ALERT_EMAIL_FROM=alertes@sdrnow.fr" \
+            "ANALYTICS_FILE=/etc/sdrnow/analytics.jsonl" \
+            "CTA_TARGET_HERO=${{ vars.CTA_TARGET_HERO }}" \
+            "CTA_TARGET_STARTER=${{ vars.CTA_TARGET_STARTER }}" \
+            "CTA_TARGET_STRATEGY=${{ vars.CTA_TARGET_STRATEGY }}" > /tmp/staging.env
           scp $SSH_OPTS /tmp/staging.env deploy@$SERVER_IP:/tmp/staging.env
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /etc/sdrnow && sudo cp /tmp/staging.env /etc/sdrnow/staging.env && sudo chmod 0600 /etc/sdrnow/staging.env && sudo chown caddy:caddy /etc/sdrnow/staging.env && rm /tmp/staging.env"
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /etc/sdrnow && sudo chown caddy:caddy /etc/sdrnow && sudo cp /tmp/staging.env /etc/sdrnow/staging.env && sudo chmod 0600 /etc/sdrnow/staging.env && sudo chown caddy:caddy /etc/sdrnow/staging.env && rm -f /tmp/staging.env"
+          rm -f /tmp/staging.env
+
+          # 8b. Redémarrer Node (nouveau code + env) AVANT de recharger Caddy : le Caddyfile route
+          #     désormais le trafic sdrnow.fr vers Node (fallback statique si Node est indisponible)
+          ssh $SSH_OPTS deploy@$SERVER_IP "(sudo systemctl restart sdrnow-staging.service 2>/dev/null || true)"
+          scp $SSH_OPTS Caddyfile.template deploy@$SERVER_IP:/tmp/Caddyfile
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo cp /tmp/Caddyfile /etc/caddy/Caddyfile && rm /tmp/Caddyfile && (sudo systemctl reload caddy 2>/dev/null || true)"
 
           # 9. Déterminer le dossier de destination selon la branche
           if [ "${{ github.ref }}" = "refs/heads/staging" ]; then

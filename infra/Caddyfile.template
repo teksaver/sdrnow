@@ -1,7 +1,64 @@
 sdrnow.fr, www.sdrnow.fr {
     root * /var/www/html
-    try_files {path} {path}/ {path}.html =404
-    file_server
+
+    # Cookieless server-side tracking: pages, prospect links, witness asset, beacon and CTA
+    # routes go through the Node micro-service (Host, X-Forwarded-For, User-Agent and Referer
+    # are forwarded by reverse_proxy). Everything else (hashed /_astro/*, images...) stays static.
+    @prospect path_regexp prospect ^/(pour|offre|en/for|en/offer)/[a-zA-Z0-9_-]{2,64}/?$
+    @tracked path / /en /en/ /mentions-legales /mentions-legales/ /en/legal-notice /en/legal-notice/ /assets/logo.svg /health /rdv/* /en/book/*
+
+    handle @prospect {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle @tracked {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle {
+        try_files {path} {path}/ {path}.html =404
+        file_server
+    }
+
+    # Node unavailable: sdrnow.fr keeps being served statically, CTAs still reach Calendly
+    handle_errors 502 503 {
+        @fallback_prospect_en path_regexp ^/en/(for|offer)/[a-zA-Z0-9_-]{2,64}/?$
+        @fallback_prospect_fr path_regexp ^/(pour|offre)/[a-zA-Z0-9_-]{2,64}/?$
+        @fallback_cta path /rdv/* /en/book/*
+        @fallback_health path /health
+
+        handle @fallback_cta {
+            header Cache-Control no-store
+            redir https://calendly.com/jc-maleysson/30min 302
+        }
+
+        handle @fallback_health {
+            respond 204
+        }
+
+        handle @fallback_prospect_en {
+            header X-Robots-Tag "noindex, nofollow"
+            rewrite * /en/index.html
+            file_server {
+                status 200
+            }
+        }
+
+        handle @fallback_prospect_fr {
+            header X-Robots-Tag "noindex, nofollow"
+            rewrite * /index.html
+            file_server {
+                status 200
+            }
+        }
+
+        handle {
+            try_files {path} {path}/ {path}.html
+            file_server {
+                status 200
+            }
+        }
+    }
 }
 
 staging.sdrnow.fr {
