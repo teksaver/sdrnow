@@ -152,6 +152,15 @@
   }
 
   // --- Pure Token Formatting Model (P2) ---
+  // The pure functions (htmlToTokens, tokensToHtml, applyTokensFormat, ...) are defined once in
+  // infra/staging-server.js and prepended to this script when /__editor.js is served.
+  // Only the DOM-specific parts (domToTokens, findDomPosition) live here.
+  const emphasisModel = window.__sdrnowEmphasisModel;
+  if (!emphasisModel) {
+    console.error('[SDRnow Editor] Emphasis model missing: /__editor.js must be served by staging-server.js');
+  }
+
+  // Tokens hold decoded characters (text node values), as in the canonical model
   function domToTokens(root, range) {
     const tokens = [];
     let tokenStart = -1;
@@ -220,111 +229,6 @@
       start: Math.min(tokenStart, tokenEnd),
       end: Math.max(tokenStart, tokenEnd),
     };
-  }
-
-  function tokensToHtml(tokens) {
-    if (!tokens || tokens.length === 0) return '';
-
-    const lines = [];
-    let currentLine = [];
-    for (const token of tokens) {
-      if (token.br) {
-        lines.push(currentLine);
-        currentLine = [];
-      } else {
-        currentLine.push(token);
-      }
-    }
-    lines.push(currentLine);
-
-    return lines.map((line) => renderTokensLine(line)).join('<br>');
-  }
-
-  function renderTokensLine(line) {
-    if (line.length === 0) return '';
-
-    const runs = [];
-    for (const token of line) {
-      if (runs.length > 0 && runs[runs.length - 1].em === token.em) {
-        runs[runs.length - 1].chars.push(token.ch);
-      } else {
-        runs.push({ em: token.em, chars: [token.ch] });
-      }
-    }
-
-    let merged = true;
-    while (merged) {
-      merged = false;
-      for (let i = 1; i < runs.length - 1; i++) {
-        if (!runs[i].em && runs[i - 1].em && runs[i + 1].em) {
-          const text = runs[i].chars.join('');
-          if (/^\s+$/.test(text)) {
-            runs[i - 1].chars.push(...runs[i].chars, ...runs[i + 1].chars);
-            runs.splice(i, 2);
-            merged = true;
-            break;
-          }
-        }
-      }
-    }
-
-    let html = '';
-    for (const run of runs) {
-      const text = run.chars.join('');
-      if (!run.em) {
-        html += text;
-      } else {
-        const matchLeading = text.match(/^\s*/)[0];
-        const matchTrailing = text.slice(matchLeading.length).match(/\s*$/)[0];
-        const core = text.slice(matchLeading.length, text.length - matchTrailing.length);
-
-        if (core.length === 0) {
-          html += text;
-        } else {
-          html += matchLeading + '<em>' + core + '</em>' + matchTrailing;
-        }
-      }
-    }
-
-    return html;
-  }
-
-  function applyTokensFormat(tokens, start, end, isEmphasis) {
-    const result = tokens.map((t) => ({ ...t }));
-    if (start === end) {
-      if (isEmphasis) return result;
-      let targetIdx = -1;
-      if (tokens[start] && tokens[start].em) {
-        targetIdx = start;
-      } else if (start > 0 && tokens[start - 1] && tokens[start - 1].em) {
-        targetIdx = start - 1;
-      }
-      if (targetIdx !== -1) {
-        let runStart = targetIdx;
-        while (runStart > 0 && result[runStart - 1].em && !result[runStart - 1].br) {
-          runStart--;
-        }
-        let runEnd = targetIdx;
-        while (runEnd < result.length - 1 && result[runEnd + 1].em && !result[runEnd + 1].br) {
-          runEnd++;
-        }
-        for (let i = runStart; i <= runEnd; i++) {
-          result[i].em = false;
-        }
-      }
-      return result;
-    }
-
-    const s = Math.max(0, Math.min(start, end));
-    const e = Math.min(result.length, Math.max(start, end));
-
-    for (let i = s; i < e; i++) {
-      if (!result[i].br) {
-        result[i].em = Boolean(isEmphasis);
-      }
-    }
-
-    return result;
   }
 
   function findDomPosition(root, targetIndex) {
@@ -451,9 +355,11 @@
       return;
     }
 
+    if (!emphasisModel) return;
     const { tokens, start, end } = domToTokens(activeInput, range);
-    const formattedTokens = applyTokensFormat(tokens, start, end, isEmphasis);
-    const newHtml = tokensToHtml(formattedTokens);
+    const formattedTokens = emphasisModel.applyTokensFormat(tokens, start, end, isEmphasis);
+    // tokensToHtml escapes &, <, > and U+00A0, so typed text is never re-read as markup
+    const newHtml = emphasisModel.tokensToHtml(formattedTokens);
 
     activeInput.innerHTML = newHtml;
 

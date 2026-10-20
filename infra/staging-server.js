@@ -80,21 +80,63 @@ export function computePreviewToken(stagingDir = STAGING_DIR, secret = STAGING_P
 
 // --- Sanitization & Validation (AD-8) ---
 
+// Emphasis formatting model (P2/P3). Tokens hold DECODED characters (what the browser
+// exposes as text node values): htmlToTokens decodes entities, tokensToHtml escapes them.
+// These functions only reference each other and JS built-ins: they are also served verbatim
+// to the browser through EMPHASIS_MODEL_PRELUDE (see buildEmphasisModelPrelude).
+// Whitespace is JS `\s` everywhere, which includes U+00A0 (&nbsp;): it is pushed out of <em>.
+
+export function decodeHtmlEntities(text) {
+  const named = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0',
+    laquo: '\u00ab', raquo: '\u00bb', hellip: '\u2026', ndash: '\u2013', mdash: '\u2014',
+    lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201c', rdquo: '\u201d', euro: '\u20ac',
+    copy: '\u00a9', reg: '\u00ae', eacute: '\u00e9', egrave: '\u00e8', ecirc: '\u00ea',
+    agrave: '\u00e0', acirc: '\u00e2', ccedil: '\u00e7', ocirc: '\u00f4', ucirc: '\u00fb',
+    ugrave: '\u00f9', icirc: '\u00ee', iuml: '\u00ef', euml: '\u00eb', Eacute: '\u00c9',
+  };
+  return text.replace(/&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|([a-zA-Z]+));/g, (entity, dec, hex, name) => {
+    if (name !== undefined) {
+      return Object.prototype.hasOwnProperty.call(named, name) ? named[name] : entity;
+    }
+    const code = dec !== undefined ? parseInt(dec, 10) : parseInt(hex, 16);
+    // Same replacement as the browser for NUL, surrogates and out-of-range code points
+    if (!code || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return '\ufffd';
+    return String.fromCodePoint(code);
+  });
+}
+
+export function escapeHtmlText(text) {
+  // Mirrors the browser's innerHTML serialization of text nodes
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\u00a0/g, '&nbsp;');
+}
+
 export function htmlToTokens(html) {
   if (typeof html !== 'string' || !html) return [];
   const tokens = [];
-  const tagRegex = /<(\/)?([a-zA-Z0-9]+)\b([^>]*)>/gi;
+  // Comments (dropped, an unterminated one runs to the end) or a well-formed tag:
+  // `<name ...>` / `</name ...>`, quoted attribute values may contain `>`.
+  // Any other `<` (e.g. `a < b`, `<img src=x` without `>`) stays plain text.
+  const tagRegex = /<!--[\s\S]*?(?:-->|$)|<(\/)?([a-zA-Z][a-zA-Z0-9-]*)(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>/g;
   let lastIndex = 0;
   let emDepth = 0;
   let match;
 
-  while ((match = tagRegex.exec(html)) !== null) {
-    const textBefore = html.slice(lastIndex, match.index);
-    if (textBefore) {
-      for (let i = 0; i < textBefore.length; i++) {
-        tokens.push({ ch: textBefore[i], em: emDepth > 0 });
-      }
+  function pushText(raw) {
+    const text = decodeHtmlEntities(raw);
+    for (let i = 0; i < text.length; i++) {
+      tokens.push({ ch: text[i], em: emDepth > 0 });
     }
+  }
+
+  while ((match = tagRegex.exec(html)) !== null) {
+    pushText(html.slice(lastIndex, match.index));
+    lastIndex = tagRegex.lastIndex;
+    if (match[2] === undefined) continue; // comment
 
     const isClosing = Boolean(match[1]);
     const tagName = match[2].toLowerCase();
@@ -108,16 +150,9 @@ export function htmlToTokens(html) {
         emDepth++;
       }
     }
-
-    lastIndex = tagRegex.lastIndex;
   }
 
-  const textAfter = html.slice(lastIndex);
-  if (textAfter) {
-    for (let i = 0; i < textAfter.length; i++) {
-      tokens.push({ ch: textAfter[i], em: emDepth > 0 });
-    }
-  }
+  pushText(html.slice(lastIndex));
 
   return tokens;
 }
@@ -172,16 +207,16 @@ function renderTokensLine(line) {
   for (const run of runs) {
     const text = run.chars.join('');
     if (!run.em) {
-      html += text;
+      html += escapeHtmlText(text);
     } else {
       const matchLeading = text.match(/^\s*/)[0];
       const matchTrailing = text.slice(matchLeading.length).match(/\s*$/)[0];
       const core = text.slice(matchLeading.length, text.length - matchTrailing.length);
 
       if (core.length === 0) {
-        html += text;
+        html += escapeHtmlText(text);
       } else {
-        html += matchLeading + '<em>' + core + '</em>' + matchTrailing;
+        html += escapeHtmlText(matchLeading) + '<em>' + escapeHtmlText(core) + '</em>' + escapeHtmlText(matchTrailing);
       }
     }
   }
@@ -227,6 +262,23 @@ export function applyTokensFormat(tokens, start, end, isEmphasis) {
   return result;
 }
 
+// Single source of truth for the browser: the pure model above is serialized with
+// fn.toString() and prepended to /__editor.js, which reads window.__sdrnowEmphasisModel.
+export function buildEmphasisModelPrelude() {
+  const fns = [decodeHtmlEntities, escapeHtmlText, htmlToTokens, renderTokensLine, tokensToHtml, applyTokensFormat];
+  return [
+    '// --- SDRnow emphasis model (generated from infra/staging-server.js, do not edit) ---',
+    '(function () {',
+    "  'use strict';",
+    ...fns.map((fn) => fn.toString()),
+    `  window.__sdrnowEmphasisModel = Object.freeze({ ${fns.map((fn) => fn.name).join(', ')} });`,
+    '})();',
+    '',
+  ].join('\n');
+}
+
+const EMPHASIS_MODEL_PRELUDE = buildEmphasisModelPrelude();
+
 export function sanitizeValue(rawVal, type) {
   if (typeof rawVal !== 'string') return '';
   if (type === 'plain') {
@@ -237,7 +289,13 @@ export function sanitizeValue(rawVal, type) {
   // 1. <strong>, <b>, <i> (with or without attributes) -> <em>
   // 2. Strip any tags other than <em>, <br>; strip attributes
   // 3. Normalize: unnest <em>, merge contiguous <em>, remove empty or spaces-only <em>
-  return tokensToHtml(htmlToTokens(rawVal)).trim();
+  // 4. Trim leading/trailing whitespace on decoded characters (so &nbsp; is trimmed too)
+  const tokens = htmlToTokens(rawVal);
+  let s = 0;
+  let e = tokens.length;
+  while (s < e && !tokens[s].br && /\s/.test(tokens[s].ch)) s++;
+  while (e > s && !tokens[e - 1].br && /\s/.test(tokens[e - 1].ch)) e--;
+  return tokensToHtml(tokens.slice(s, e));
 }
 
 export function validateAndSanitizePayload(body, schema) {
@@ -822,7 +880,7 @@ export function createRequestHandler(options = {}) {
 
       if (fs.existsSync(editorScriptPath)) {
         res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
-        return res.end(fs.readFileSync(editorScriptPath, 'utf8'));
+        return res.end(EMPHASIS_MODEL_PRELUDE + fs.readFileSync(editorScriptPath, 'utf8'));
       }
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('Editor script not found');

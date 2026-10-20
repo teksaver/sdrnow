@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import vm from 'node:vm';
 import { Readable, Writable } from 'node:stream';
 import {
   createRequestHandler,
@@ -10,6 +11,7 @@ import {
   htmlToTokens,
   tokensToHtml,
   applyTokensFormat,
+  buildEmphasisModelPrelude,
   validateAndSanitizePayload,
   patchHtmlContent,
   computePreviewToken,
@@ -278,6 +280,151 @@ test('pure token format: E11 (indépendance FR/EN)', () => {
 
   assert.equal(frRes, 'Votre SDR dès demain');
   assert.equal(en, 'Your SDR <em>starting tomorrow</em>');
+});
+
+// Text as the browser exposes it (decoded text node values), like domToTokens in editor-client.js
+function textToTokens(text, em = false) {
+  return Array.from(text.split(''), (ch) => ({ ch, em }));
+}
+
+// Loads the prelude served with /__editor.js in an isolated context, as the browser would
+function loadBrowserModel(prelude = buildEmphasisModelPrelude()) {
+  const context = vm.createContext({ window: {} });
+  vm.runInContext(prelude, context);
+  return context.window.__sdrnowEmphasisModel;
+}
+
+// E1-E11 as (model) => html, so they run against both the server and the browser copy
+const EMPHASIS_CASES = {
+  E1: (m) => {
+    const tokens = m.htmlToTokens('<em>Votre SDR externalisé dès demain</em>');
+    const start = 'Votre '.length;
+    return m.tokensToHtml(m.applyTokensFormat(tokens, start, start + 'SDR externalisé'.length, false));
+  },
+  E2: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('mot <em>orange</em> fin'), 0, 'mot orange'.length, true)),
+  E3: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>orange</em>'), 2, 5, true)),
+  E4: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>a</em> et <em>b</em>'), 2, 4, true)),
+  E5: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>a</em> et <em>b</em>'), 0, 6, false)),
+  E6: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>ligne 1<br>ligne 2</em>'), 6, 13, false)),
+  E7: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('Appel de 100 leads ou'), 8, 19, true)),
+  E8: (m) => m.tokensToHtml(m.htmlToTokens('Appel de <strong>100 leads</strong>')),
+  E9: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>orange</em>'), 2, 2, false)),
+  E10: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('mot <em>orange</em>'), 100, 150, true)),
+  E11: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>Votre SDR</em> dès demain'), 0, 9, false)),
+  escape: (m) => m.tokensToHtml(textToTokens('a < b & c <img src=x onerror=alert(1)>')),
+  nbsp: (m) => m.tokensToHtml(m.applyTokensFormat(textToTokens('mot\u00a0orange\u00a0fin'), 3, 11, true)),
+};
+
+const SERVER_MODEL = { htmlToTokens, tokensToHtml, applyTokensFormat };
+
+test('pure token format: E1-E11 shared cases give the expected markup', () => {
+  const expected = {
+    E1: '<em>Votre</em> SDR externalisé <em>dès demain</em>',
+    E2: '<em>mot orange</em> fin',
+    E3: '<em>orange</em>',
+    E4: '<em>a et b</em>',
+    E5: 'a et b',
+    E6: '<em>ligne</em> 1<br>ligne <em>2</em>',
+    E7: 'Appel de <em>100 leads</em> ou',
+    E8: 'Appel de <em>100 leads</em>',
+    E9: 'orange',
+    E10: 'mot <em>orange</em>',
+    E11: 'Votre SDR dès demain',
+    escape: 'a &lt; b &amp; c &lt;img src=x onerror=alert(1)&gt;',
+    nbsp: 'mot&nbsp;<em>orange</em>&nbsp;fin',
+  };
+  for (const [name, run] of Object.entries(EMPHASIS_CASES)) {
+    assert.equal(run(SERVER_MODEL), expected[name], name);
+  }
+});
+
+test('escaping: decoded text tokens are escaped by tokensToHtml (F1)', () => {
+  assert.equal(tokensToHtml(textToTokens('a < b & c')), 'a &lt; b &amp; c');
+  assert.equal(
+    tokensToHtml(textToTokens('<img src=x onerror=alert(1)>')),
+    '&lt;img src=x onerror=alert(1)&gt;'
+  );
+  // Same inside an emphasis run, and after an Emphase action on typed text
+  const typed = textToTokens('R&D <b>');
+  assert.equal(tokensToHtml(applyTokensFormat(typed, 0, typed.length, true)), '<em>R&amp;D &lt;b&gt;</em>');
+});
+
+test('htmlToTokens: decodes entities and keeps malformed tags as text (F3)', () => {
+  const text = (html) => htmlToTokens(html).map((t) => (t.br ? '\n' : t.ch)).join('');
+  assert.equal(text('R&amp;D &lt;b&gt; &quot;x&quot; &#39;y&apos; a&nbsp;b'), 'R&D <b> "x" \'y\' a\u00a0b');
+  assert.equal(text('&#233;&#xE9;&#x1F600;&eacute;'), 'éé\u{1F600}é');
+  assert.equal(text('a < b <img src=x onerror=alert(1)'), 'a < b <img src=x onerror=alert(1)');
+  assert.equal(text('a<!-- hidden <em> -->b<!-- unterminated'), 'ab');
+  assert.equal(text('<em title="a>b">x</em>'), 'x');
+  assert.deepEqual(htmlToTokens('<em>&amp;</em>'), [{ ch: '&', em: true }]);
+});
+
+test('sanitizeValue: no double escaping, unterminated tags escaped, &nbsp; stable', () => {
+  assert.equal(sanitizeValue('R&amp;D <em>x</em>', 'rich'), 'R&amp;D <em>x</em>');
+  const unterminated = sanitizeValue('<img src=x onerror=alert(1)', 'rich');
+  assert.equal(unterminated, '&lt;img src=x onerror=alert(1)');
+  assert.ok(!unterminated.includes('<img'));
+  assert.equal(sanitizeValue('a < b & c', 'rich'), 'a &lt; b &amp; c');
+  assert.equal(sanitizeValue('&lt;em&gt;texte&lt;/em&gt;', 'rich'), '&lt;em&gt;texte&lt;/em&gt;');
+  // &nbsp; round-trip, and whitespace pushed out of <em> / trimmed like a regular space
+  assert.equal(sanitizeValue('dès&nbsp;demain&nbsp;!', 'rich'), 'dès&nbsp;demain&nbsp;!');
+  assert.equal(sanitizeValue('mot&nbsp;<em>&nbsp;orange&nbsp;</em>&nbsp;fin', 'rich'), 'mot&nbsp;&nbsp;<em>orange</em>&nbsp;&nbsp;fin');
+  assert.equal(sanitizeValue('<em>a</em>&nbsp;<em>b</em>', 'rich'), '<em>a&nbsp;b</em>');
+  assert.equal(sanitizeValue('<em>&nbsp;</em>', 'rich'), '');
+  assert.equal(sanitizeValue('&nbsp; texte &nbsp;', 'rich'), 'texte');
+});
+
+test('sanitizeValue: idempotent on rich values', () => {
+  const inputs = [
+    'R&amp;D <em>x</em>',
+    'Audit & Scénarisation',
+    '<img src=x onerror=alert(1)',
+    '&lt;img src=x onerror=alert(1)&gt;',
+    'a < b & c > d',
+    '<em>a<em>b</em></em> <strong style="x">c</strong>',
+    'mot&nbsp;<em>&nbsp;orange&nbsp;</em>&nbsp;fin',
+    ' <br> <em>ligne 1<br>ligne 2</em> ',
+    '<!-- note --><em title="a>b">x</em><script>alert(1)</script>',
+    '&#x1F600; &#0; &eacute; &unknown; &amp;amp;',
+    '<em>Votre SDR</em>\u00a0dès demain',
+  ];
+  for (const input of inputs) {
+    const once = sanitizeValue(input, 'rich');
+    assert.equal(sanitizeValue(once, 'rich'), once, input);
+  }
+});
+
+test('sanitizeValue: every rich value of src/i18n/translations.json is stable (FR and EN)', () => {
+  const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src', 'i18n', 'translations.json'), 'utf8'));
+  const richKeys = Object.keys(data.schema).filter((key) => data.schema[key].type === 'rich');
+  assert.ok(richKeys.length > 0);
+  for (const lang of ['fr', 'en']) {
+    for (const key of richKeys) {
+      const value = data[lang][key];
+      assert.equal(sanitizeValue(value, 'rich'), value, `${lang} ${key}`);
+    }
+  }
+});
+
+test('browser model: the /__editor.js prelude behaves exactly like the server model (F2)', () => {
+  const browserModel = loadBrowserModel();
+  assert.equal(typeof browserModel.htmlToTokens, 'function');
+  assert.equal(typeof browserModel.tokensToHtml, 'function');
+  assert.equal(typeof browserModel.applyTokensFormat, 'function');
+  for (const [name, run] of Object.entries(EMPHASIS_CASES)) {
+    assert.equal(run(browserModel), run(SERVER_MODEL), name);
+  }
+  // What the browser sends back (innerHTML of decoded text) is stable under the server sanitizer
+  const typed = browserModel.tokensToHtml(textToTokens('R&D <img src=x onerror=alert(1)>\u00a0fin'));
+  assert.equal(sanitizeValue(typed, 'rich'), typed);
+});
+
+test('editor-client.js: no local copy of the pure model, uses the served one', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'infra', 'editor-client.js'), 'utf8');
+  for (const name of ['htmlToTokens', 'tokensToHtml', 'renderTokensLine', 'applyTokensFormat', 'escapeHtmlText']) {
+    assert.ok(!new RegExp(`function\\s+${name}\\b`).test(source), name);
+  }
+  assert.ok(source.includes('window.__sdrnowEmphasisModel'));
 });
 
 
@@ -700,6 +847,39 @@ test('Server: Access control on /__editor.js (admin only)', async () => {
     assert.equal(res3.statusCode, 200);
     assert.equal(res3.headers['content-type'], 'application/javascript; charset=utf-8');
     assert.ok(res3.body.includes('editor client'));
+    assert.ok(res3.body.startsWith(buildEmphasisModelPrelude()));
+  } finally {
+    cleanupDirs(baseTmp);
+  }
+});
+
+test('Server: served /__editor.js = emphasis model prelude + real editor-client.js, parseable', async () => {
+  const { baseTmp, stagingDir, prodDir } = setupTestDirs();
+  const handler = createRequestHandler({
+    stagingDir,
+    prodDir,
+    adminUser: TEST_ADMIN_USER,
+    adminPassSha256: TEST_ADMIN_PASS_SHA256,
+    secret: TEST_SECRET,
+    editorScriptPath: path.join(process.cwd(), 'infra', 'editor-client.js'),
+  });
+  const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
+
+  try {
+    const res = await mockRequest(handler, '/__editor.js', {
+      headers: { Authorization: `Basic ${adminAuth}` },
+    });
+    assert.equal(res.statusCode, 200);
+    const prelude = buildEmphasisModelPrelude();
+    assert.ok(res.body.startsWith(prelude));
+    assert.ok(res.body.includes('window.__sdrnowEmphasisModel = Object.freeze({'));
+    assert.doesNotThrow(() => new vm.Script(res.body, { filename: '__editor.js' }));
+
+    // The prelude extracted from the served script yields the server results on E1-E11
+    const browserModel = loadBrowserModel(res.body.slice(0, prelude.length));
+    for (const [name, run] of Object.entries(EMPHASIS_CASES)) {
+      assert.equal(run(browserModel), run(SERVER_MODEL), name);
+    }
   } finally {
     cleanupDirs(baseTmp);
   }
