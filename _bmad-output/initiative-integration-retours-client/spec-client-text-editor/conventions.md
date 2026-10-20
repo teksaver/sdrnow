@@ -28,6 +28,8 @@
 - **Validation & Purge Serveur :**
   - Rejet (`400 Bad Request`) si une clé n'appartient pas à la whitelist du schéma existant ou si une valeur obligatoire est vide.
   - Suppression stricte de toute balise HTML hors `<em>`, `<br>` pour les clés `rich`, et de toute balise HTML pour les clés `plain` ; `<strong>`, `<b>` et `<i>` sont convertis en `<em>` ; normalisation sans imbrication ni `<em>` vide ou adjacent.
+  - Les valeurs `plain` sont stockées comme du **texte** (pas du HTML) : l'éditeur envoie le `textContent` du champ, aucune entité n'est encodée ni décodée (« R&D » reste `R&D`), et le texte est échappé à l'injection (patch HTML serveur, `{t()}` Astro, `textContent` côté éditeur).
+  - Une valeur obligatoire est vide si elle ne contient aucun caractère visible : balises, `<br>`, espaces et `&nbsp;` ne comptent pas.
 - **Patch statique immédiat :** Le micro-service remplace le contenu des nœuds `[data-i18n="<key>"]` (ainsi que `<title>` et `<meta name="description">`) directement dans les fichiers HTML compilés de `/var/www/staging` et `/var/www/html` en moins de 10 ms, sans exécuter `astro build` sur le VPS.
 
 ## 5. Contrôle d'Accès Staging : Basic Auth `admin` & Jeton Read-Only par Révision

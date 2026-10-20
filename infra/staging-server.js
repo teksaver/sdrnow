@@ -266,8 +266,13 @@ const EMPHASIS_MODEL_PRELUDE = buildEmphasisModelPrelude();
 export function sanitizeValue(rawVal, type) {
   if (typeof rawVal !== 'string') return '';
   if (type === 'plain') {
-    // Strip all HTML and replace newlines with a single space
-    return rawVal.replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').trim();
+    // Plain values are text, not HTML (the editor sends textContent, Astro renders {t()} escaped,
+    // patchHtmlContent escapes them): entities are NOT decoded, so « R&D » stays R&D.
+    // Tag-like sequences are still dropped and line breaks become a single space.
+    return rawVal
+      .replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '')
+      .replace(/[\r\n]+/g, ' ')
+      .trim();
   }
   // Rich:
   // 1. <strong>, <b>, <i> (with or without attributes) -> <em>
@@ -280,6 +285,13 @@ export function sanitizeValue(rawVal, type) {
   while (s < e && !tokens[s].br && /\s/.test(tokens[s].ch)) s++;
   while (e > s && !tokens[e - 1].br && /\s/.test(tokens[e - 1].ch)) e--;
   return tokensToHtml(tokens.slice(s, e));
+}
+
+// A value is blank when it has no visible character: tags, <br>, spaces and &nbsp; do not count
+export function isBlankValue(value, type) {
+  if (typeof value !== 'string') return true;
+  if (type === 'plain') return value.trim().length === 0;
+  return htmlToTokens(value).every((t) => t.br || /\s/.test(t.ch));
 }
 
 export function validateAndSanitizePayload(body, schema) {
@@ -302,9 +314,8 @@ export function validateAndSanitizePayload(body, schema) {
       }
 
       const cleanVal = sanitizeValue(val, fieldDef.type);
-      const textOnly = cleanVal.replace(/<[^>]*>/g, '').trim();
 
-      if (!fieldDef.optional && textOnly.length === 0) {
+      if (!fieldDef.optional && isBlankValue(cleanVal, fieldDef.type)) {
         return { error: 'empty_required_field', message: `Field "${key}" (${lang}) cannot be empty` };
       }
 
@@ -319,6 +330,9 @@ export function validateAndSanitizePayload(body, schema) {
 
 export function patchHtmlContent(html, dict) {
   let patched = html;
+  // Plain values are decoded text and must be escaped; rich values are already sanitized HTML.
+  // Title and meta are always plain; an element is rich only if it says data-i18n-type="rich".
+  const isRichAttrs = (attrs) => /\bdata-i18n-type=["']rich["']/i.test(attrs);
 
   for (const [key, val] of Object.entries(dict)) {
     const escapedKey = escapeRegex(key);
@@ -327,7 +341,7 @@ export function patchHtmlContent(html, dict) {
     if (key === 'meta.description') {
       const metaRegex = new RegExp(`<meta([^>]*\\bdata-i18n-content=["']${escapedKey}["'][^>]*)>`, 'gi');
       patched = patched.replace(metaRegex, (match, attrs) => {
-        const escapedVal = val.replace(/"/g, '&quot;');
+        const escapedVal = escapeHtmlText(val).replace(/"/g, '&quot;');
         let newAttrs;
         if (/\bcontent=(["'])[\s\S]*?\1/i.test(attrs)) {
           newAttrs = attrs.replace(/\bcontent=(["'])[\s\S]*?\1/i, () => `content="${escapedVal}"`);
@@ -341,12 +355,12 @@ export function patchHtmlContent(html, dict) {
     // 2. Title: <title ... data-i18n="key" ...>...</title>
     if (key.startsWith('meta.')) {
       const titleRegex = new RegExp(`<title([^>]*\\bdata-i18n=["']${escapedKey}["'][^>]*)>[\\s\\S]*?<\\/title>`, 'gi');
-      patched = patched.replace(titleRegex, (match, attrs) => `<title${attrs}>${val}</title>`);
+      patched = patched.replace(titleRegex, (match, attrs) => `<title${attrs}>${escapeHtmlText(val)}</title>`);
     }
 
     // 3. Regular elements: <tag ... data-i18n="key" ...>...</tag>
     const elRegex = new RegExp(`<([a-zA-Z0-9]+)([^>]*\\bdata-i18n=["']${escapedKey}["'][^>]*)>[\\s\\S]*?<\\/\\1>`, 'gi');
-    patched = patched.replace(elRegex, (match, tag, attrs) => `<${tag}${attrs}>${val}</${tag}>`);
+    patched = patched.replace(elRegex, (match, tag, attrs) => `<${tag}${attrs}>${isRichAttrs(attrs) ? val : escapeHtmlText(val)}</${tag}>`);
   }
 
   return patched;

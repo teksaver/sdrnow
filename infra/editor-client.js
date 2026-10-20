@@ -123,6 +123,27 @@
   }
 
   // --- Live DOM Language Switcher (CAP-1) ---
+  // Plain values are decoded text (never HTML), rich values are sanitized HTML
+  function isPlainKey(key) {
+    return !state.schema[key] || state.schema[key].type !== 'rich';
+  }
+
+  function setNodeValue(node, key, value) {
+    if (isPlainKey(key)) {
+      node.textContent = value;
+    } else {
+      node.innerHTML = value;
+    }
+  }
+
+  // Blank = no visible character (tags, <br>, spaces and &nbsp; do not count)
+  function isBlankValue(key, value) {
+    if (!value) return true;
+    if (isPlainKey(key)) return value.trim().length === 0;
+    if (!emphasisModel) return value.replace(/<[^>]*>/g, '').trim().length === 0;
+    return emphasisModel.htmlToTokens(value).every((t) => t.br || /\s/.test(t.ch));
+  }
+
   function applyLanguageToPage(lang) {
     state.currentLang = lang;
     const dict = state.translations[lang] || {};
@@ -146,7 +167,7 @@
       if (node.tagName === 'TITLE') return;
       const key = node.getAttribute('data-i18n');
       if (dict[key] !== undefined) {
-        node.innerHTML = dict[key];
+        setNodeValue(node, key, dict[key]);
       }
     });
   }
@@ -643,8 +664,8 @@
     }
 
     // Populate values
-    inputFr.innerHTML = state.translations.fr[key] || '';
-    inputEn.innerHTML = state.translations.en[key] || '';
+    setNodeValue(inputFr, key, state.translations.fr[key] || '');
+    setNodeValue(inputEn, key, state.translations.en[key] || '');
 
     // Clear errors
     document.getElementById('sdrnow-err-fr').style.display = 'none';
@@ -805,14 +826,17 @@
     // 6. Input Live DOM Sync
     function handleInputSync(lang, inputEl) {
       if (!state.activeKey) return;
-      const html = inputEl.innerHTML;
-      state.translations[lang][state.activeKey] = html;
+      // Plain fields store their text (so « R&D » stays R&D, not R&amp;D), rich fields their HTML
+      const value = isPlainKey(state.activeKey)
+        ? inputEl.textContent.replace(/[\r\n]+/g, ' ')
+        : inputEl.innerHTML;
+      state.translations[lang][state.activeKey] = value;
       setDirty(true);
 
       // If page currently matches this language, update the DOM in real-time
       if (state.currentLang === lang) {
         if (state.activeElement) {
-          state.activeElement.innerHTML = html;
+          setNodeValue(state.activeElement, state.activeKey, value);
         } else if (state.activeKey.startsWith('meta.')) {
           if (state.activeKey === 'meta.description') {
             const metaEl = document.querySelector('meta[data-i18n-content="meta.description"]');
@@ -918,9 +942,7 @@
       // Validate all required fields
       for (const [key, fieldDef] of Object.entries(state.schema)) {
         if (!fieldDef.optional) {
-          const frText = (state.translations.fr[key] || '').replace(/<[^>]*>/g, '').trim();
-          const enText = (state.translations.en[key] || '').replace(/<[^>]*>/g, '').trim();
-          if (!frText || !enText) {
+          if (isBlankValue(key, state.translations.fr[key]) || isBlankValue(key, state.translations.en[key])) {
             showToast(`Le champ "${key}" ne peut pas être vide.`, 'error');
             return;
           }

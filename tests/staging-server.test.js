@@ -13,6 +13,7 @@ import {
   applyTokensFormat,
   buildEmphasisModelPrelude,
   validateAndSanitizePayload,
+  isBlankValue,
   patchHtmlContent,
   computePreviewToken,
   getRevision,
@@ -164,6 +165,29 @@ function mockRequest(handler, url, options = {}) {
 test('sanitizeValue: strips all tags for plain type', () => {
   const result = sanitizeValue('Hello <strong>World</strong>\n<script>alert(1)</script>', 'plain');
   assert.equal(result, 'Hello World alert(1)');
+});
+
+test('sanitizeValue: plain values are stored as text, not HTML (F4)', () => {
+  // The editor sends textContent: « R&D » and « < 10 ms » are kept as typed, never entity-encoded
+  assert.equal(sanitizeValue('R&D', 'plain'), 'R&D');
+  assert.equal(sanitizeValue('< 10 ms', 'plain'), '< 10 ms');
+  assert.equal(sanitizeValue('a < b > c', 'plain'), 'a < b > c');
+  assert.equal(sanitizeValue('dès\u00a0demain', 'plain'), 'dès\u00a0demain');
+  assert.equal(sanitizeValue('Appel <b>gratuit</b><br>ici', 'plain'), 'Appel gratuitici');
+  for (const v of ['R&D', '< 10 ms', 'AT&amp;T', 'a < b > c']) {
+    assert.equal(sanitizeValue(sanitizeValue(v, 'plain'), 'plain'), sanitizeValue(v, 'plain'));
+  }
+});
+
+test('isBlankValue: tags, <br>, spaces and &nbsp; are not visible content (F5)', () => {
+  assert.equal(isBlankValue('&nbsp;', 'rich'), true);
+  assert.equal(isBlankValue('<br>&nbsp; <em> </em>', 'rich'), true);
+  assert.equal(isBlankValue('<em>x</em>', 'rich'), false);
+  assert.equal(isBlankValue('\u00a0 ', 'plain'), true);
+  assert.equal(isBlankValue('0', 'plain'), false);
+  const schema = { 'hero.title': { type: 'rich', optional: false }, 'hero.cta': { type: 'plain', optional: false } };
+  const res = validateAndSanitizePayload({ fr: { 'hero.title': '<br><br>' }, en: {} }, schema);
+  assert.equal(res.error, 'empty_required_field');
 });
 
 test('sanitizeValue: preserves <em>, <br> without attributes and converts <strong>, <b>, <i> to <em> for rich type', () => {
@@ -483,9 +507,17 @@ test('patchHtmlContent: correctly patches elements, title and meta description w
 
   const patched = patchHtmlContent(html, dict);
 
-  assert.ok(patched.includes('<title data-i18n="meta.title">Nouveau Titre $1 & Étoiles</title>'));
-  assert.ok(patched.includes('content="Nouvelle &quot;Description&quot; & $100"'));
+  // Title and meta are plain: their decoded text is escaped
+  assert.ok(patched.includes('<title data-i18n="meta.title">Nouveau Titre $1 &amp; Étoiles</title>'));
+  assert.ok(patched.includes('content="Nouvelle &quot;Description&quot; &amp; $100"'));
   assert.ok(patched.includes('<h1 data-i18n="hero.title" data-i18n-type="rich">Nouveau Hero <em>Accent $&</em></h1>'));
+});
+
+test('patchHtmlContent: plain elements are escaped, rich elements are not (F4)', () => {
+  const html = '<a data-i18n="hero.cta" data-i18n-type="plain">Old</a><p data-i18n="hero.description" data-i18n-type="rich">Old</p>';
+  const patched = patchHtmlContent(html, { 'hero.cta': 'R&D <b>x</b>', 'hero.description': 'R&amp;D <em>x</em>' });
+  assert.ok(patched.includes('<a data-i18n="hero.cta" data-i18n-type="plain">R&amp;D &lt;b&gt;x&lt;/b&gt;</a>'));
+  assert.ok(patched.includes('<p data-i18n="hero.description" data-i18n-type="rich">R&amp;D <em>x</em></p>'));
 });
 
 // ==========================================
