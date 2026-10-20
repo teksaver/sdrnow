@@ -541,6 +541,7 @@ test('Server: Gatekeeper authentication logic (AD-7)', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   try {
@@ -571,6 +572,7 @@ test('Server: Gatekeeper authentication logic (AD-7)', async () => {
       adminUser: 'client,admin',
       adminPassSha256: TEST_ADMIN_PASS_SHA256,
       secret: TEST_SECRET,
+      stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
     });
     const clientAuth = Buffer.from(`client:${TEST_ADMIN_PASS}`).toString('base64');
     const resClient = await mockRequest(handlerMulti, '/', {
@@ -627,6 +629,7 @@ test('Server: API staging mutation and atomic patch (<10ms)', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -693,6 +696,7 @@ test('Server: API publish mutates both Staging and Prod', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -751,6 +755,7 @@ test('Server: API reset restores Staging from Prod without touching Prod', async
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -786,6 +791,7 @@ test('Server: Preview token invalidation on Staging mutation', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -837,6 +843,7 @@ test('Server: GET /api/translations returns schema, fr, en, previewToken, previe
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -869,6 +876,7 @@ test('Server: Access control on /__editor.js (admin only)', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
     editorScriptPath: editorPath,
   });
 
@@ -907,6 +915,7 @@ test('Server: served /__editor.js = emphasis model prelude + real editor-client.
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
     editorScriptPath: path.join(process.cwd(), 'infra', 'editor-client.js'),
   });
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -943,6 +952,7 @@ test('Server: POST /api/reset gracefully falls back when prod translations.json 
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -1002,8 +1012,11 @@ function setupTracking(trackerOptions = {}) {
   const dirs = setupTestDirs();
   fs.mkdirSync(path.join(dirs.prodDir, 'assets'), { recursive: true });
   fs.writeFileSync(path.join(dirs.prodDir, 'assets', 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+  fs.mkdirSync(path.join(dirs.stagingDir, 'assets'), { recursive: true });
+  fs.writeFileSync(path.join(dirs.stagingDir, 'assets', 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><!-- staging --></svg>');
   const analyticsFile = path.join(dirs.baseTmp, 'etc-sdrnow', 'analytics.jsonl');
-  const ctx = { ...dirs, analyticsFile, clock: Date.parse('2026-10-20T12:00:00Z'), sent: [], prodResponses: [] };
+  const stagingAnalyticsFile = path.join(dirs.baseTmp, 'etc-sdrnow', 'analytics-staging.jsonl');
+  const ctx = { ...dirs, analyticsFile, stagingAnalyticsFile, clock: Date.parse('2026-10-20T12:00:00Z'), sent: [], prodResponses: [] };
   ctx.makeTracker = (extra = {}) =>
     createTracker({
       analyticsFile,
@@ -1018,14 +1031,17 @@ function setupTracking(trackerOptions = {}) {
       ...extra,
     });
   ctx.tracker = ctx.makeTracker();
-  ctx.makeHandler = (tracker) =>
+  // Staging test visits: separate log, emails disabled (sendEmail still wired to ctx.sent to prove it)
+  ctx.stagingTracker = ctx.makeTracker({ analyticsFile: stagingAnalyticsFile, emailsDisabled: true });
+  ctx.makeHandler = (tracker, stagingTracker = ctx.stagingTracker) =>
     createRequestHandler({
       stagingDir: dirs.stagingDir,
       prodDir: dirs.prodDir,
-      adminUser: TEST_ADMIN_USER,
+      adminUser: 'client,admin',
       adminPassSha256: TEST_ADMIN_PASS_SHA256,
       secret: TEST_SECRET,
       tracker,
+      stagingTracker,
     });
   ctx.handler = ctx.makeHandler(ctx.tracker);
   // Every prod request goes through here: invariant "no Set-Cookie on sdrnow.fr"
@@ -1040,16 +1056,27 @@ function setupTracking(trackerOptions = {}) {
     return res;
   };
   ctx.health = (body, opts = {}) => ctx.prod('/health', { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body), ...opts });
-  ctx.events = () => {
-    if (!fs.existsSync(analyticsFile)) return [];
-    return fs.readFileSync(analyticsFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  // Staging request: auth = 'admin' | 'client' | null, preview = token sent as the preview cookie
+  ctx.staging = (url, { ip = TEST_IPS[0], ua = IPHONE_UA, auth = 'admin', preview = null, headers = {}, ...rest } = {}) => {
+    const h = { Host: 'staging.sdrnow.fr', 'User-Agent': ua, 'X-Forwarded-For': ip };
+    if (auth) h.Authorization = `Basic ${Buffer.from(`${auth}:${TEST_ADMIN_PASS}`).toString('base64')}`;
+    if (preview) h.Cookie = `staging_preview=${preview}`;
+    return mockRequest(ctx.handler, url, { ...rest, headers: { ...h, ...headers } });
   };
+  // Production stats request (Basic Auth expected, so not through ctx.prod)
+  ctx.prodStats = (url, { ip = TEST_IPS[0], headers = {}, ...rest } = {}) =>
+    mockRequest(ctx.handler, url, { ...rest, headers: { Host: 'sdrnow.fr', 'User-Agent': MAC_UA, 'X-Forwarded-For': ip, ...headers } });
+  const readLog = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  ctx.events = () => readLog(analyticsFile);
+  ctx.stagingEvents = () => readLog(stagingAnalyticsFile);
   ctx.cleanup = () => {
     ctx.tracker.stopTimers();
-    // Invariant: no raw IP is ever written to the log
-    if (fs.existsSync(analyticsFile)) {
-      const raw = fs.readFileSync(analyticsFile, 'utf8');
-      for (const ip of TEST_IPS) assert.ok(!raw.includes(ip), `raw IP ${ip} leaked into analytics.jsonl`);
+    ctx.stagingTracker.stopTimers();
+    // Invariant: no raw IP is ever written to either log
+    for (const file of [analyticsFile, stagingAnalyticsFile]) {
+      if (!fs.existsSync(file)) continue;
+      const raw = fs.readFileSync(file, 'utf8');
+      for (const ip of TEST_IPS) assert.ok(!raw.includes(ip), `raw IP ${ip} leaked into ${path.basename(file)}`);
     }
     cleanupDirs(dirs.baseTmp);
   };
@@ -1288,7 +1315,7 @@ test('tracking: hot prospect alert after inactivity (2 devices + Starter click),
       assert.equal(m.subject, '🔥 [SDRnow] acme vient de consulter votre offre (2 appareils • Clic RDV Starter)');
       assert.match(m.html, /2e appareil : Mac \(Chrome\)/);
       assert.match(m.html, /Mentions légales/);
-      assert.match(m.html, /https:\/\/staging\.sdrnow\.fr\/stats/);
+      assert.match(m.html, /href="https:\/\/sdrnow\.fr\/stats"/, 'STATS_URL defaults to the production stats');
       assert.ok(!m.html.includes('LinkedInBot'), 'bot events are not in the summary');
     }
     assert.notEqual(ctx.sent[0].to, ctx.sent[1].to);
@@ -1389,53 +1416,144 @@ test('tracking: midnight rotation sends the anonymous digest only when >= 1 huma
   }
 });
 
-test('tracking: /stats is admin only (401 / 403), unknown period falls back to today, empty state', async () => {
+test('tracking: staging /stats is admin only (401 / 403), unknown period falls back to today, empty state', async () => {
   const ctx = setupTracking();
   try {
-    const anon = await mockRequest(ctx.handler, '/stats', { headers: { Host: 'staging.sdrnow.fr' } });
+    const anon = await ctx.staging('/stats', { auth: null });
     assert.equal(anon.statusCode, 401);
     const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
-    const readOnly = await mockRequest(ctx.handler, `/stats?preview=${token}`, { headers: { Host: 'staging.sdrnow.fr' } });
+    const readOnly = await ctx.staging(`/stats?preview=${token}`, { auth: null });
     assert.equal(readOnly.statusCode, 403);
 
-    const empty = await mockRequest(ctx.handler, '/stats?period=nimporte', { headers: { Host: 'staging.sdrnow.fr', ...adminHeaders() } });
+    const empty = await ctx.staging('/stats?period=nimporte');
     assert.equal(empty.statusCode, 200);
     assert.match(empty.headers['content-type'], /text\/html/);
+    assert.equal(empty.headers['x-robots-tag'], 'noindex, nofollow');
     assert.match(empty.body, /href="\/stats\?period=today" aria-current="page"/);
     assert.match(empty.body, /Aucun lien prospect visité/);
     assert.match(empty.body, /Bots &amp; Scanners écartés/);
     assert.ok(!/<script[^>]+src=|<link[^>]+stylesheet|fonts\.googleapis/.test(empty.body), 'no third-party resource');
-
-    await ctx.prod('/pour/acme');
-    await ctx.prod('/assets/logo.svg');
-    await ctx.prod('/pour/acme', { ip: TEST_IPS[2], ua: MAC_UA });
-    await ctx.prod('/assets/logo.svg', { ip: TEST_IPS[2], ua: MAC_UA });
-    const page = await mockRequest(ctx.handler, '/stats?period=7d', { headers: { Host: 'staging.sdrnow.fr', ...adminHeaders() } });
-    assert.equal(page.statusCode, 200);
-    assert.match(page.body, /href="\/stats\?period=7d" aria-current="page"/);
-    assert.match(page.body, /acme/);
-    assert.match(page.body, /🔥 2 appareils \(Partage interne\)/);
-    assert.match(page.body, /🛡 Adblock \/ Sans JS/);
-    assert.match(page.body, /N\/A \(Sans JS\)/);
+    assert.equal(ctx.stagingEvents().length, 0, '/stats is never counted as a visit');
   } finally {
     ctx.cleanup();
   }
 });
 
-test('tracking: /api/stats/export streams analytics.jsonl as an attachment (admin), empty when missing', async () => {
+test('stats prod: sdrnow.fr/stats?period=7d (admin) shows the production log, noindex, no-store, not counted as a visit', async () => {
   const ctx = setupTracking();
   try {
-    const missing = await mockRequest(ctx.handler, '/api/stats/export', { headers: { Host: 'staging.sdrnow.fr', ...adminHeaders() } });
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    await ctx.prod('/pour/acme', { ip: TEST_IPS[2], ua: MAC_UA });
+    await ctx.prod('/assets/logo.svg', { ip: TEST_IPS[2], ua: MAC_UA });
+    const before = ctx.events().length;
+    for (const host of ['sdrnow.fr', 'www.sdrnow.fr']) {
+      const page = await ctx.prodStats('/stats?period=7d', { headers: { Host: host, ...adminHeaders() } });
+      assert.equal(page.statusCode, 200, host);
+      assert.equal(page.headers['x-robots-tag'], 'noindex, nofollow');
+      assert.equal(page.headers['cache-control'], 'no-store');
+      assert.equal(page.headers['set-cookie'], undefined);
+      assert.match(page.body, /Données affichées : Prod — sdrnow\.fr/);
+      assert.match(page.body, /href="https:\/\/staging\.sdrnow\.fr\/stats">Voir Staging — visites de test/);
+      assert.match(page.body, /href="\/stats\?period=7d" aria-current="page"/);
+      assert.match(page.body, /acme/);
+      assert.match(page.body, /🔥 2 appareils \(Partage interne\)/);
+      assert.match(page.body, /🛡 Adblock \/ Sans JS/);
+      assert.match(page.body, /N\/A \(Sans JS\)/);
+      assert.ok(!page.body.includes('👤'), 'production stays anonymous: no tester');
+    }
+    assert.equal((await ctx.prodStats('/stats/', { headers: adminHeaders() })).statusCode, 200);
+    assert.equal((await ctx.prodStats('/stats', { method: 'HEAD', headers: adminHeaders() })).statusCode, 200);
+    assert.equal(ctx.events().length, before, 'stats requests are never logged as visits');
+    assert.ok(ctx.events().every((e) => !('tester' in e)), 'no tester field in analytics.jsonl');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats prod: without / with bad credentials -> 401 + WWW-Authenticate; 11th failure per minute and IP -> 429', async () => {
+  const ctx = setupTracking();
+  try {
+    const bare = await ctx.prodStats('/stats');
+    assert.equal(bare.statusCode, 401);
+    assert.match(bare.headers['www-authenticate'], /^Basic realm=/);
+    assert.equal(bare.headers['x-robots-tag'], 'noindex, nofollow');
+    assert.equal(bare.headers['cache-control'], 'no-store');
+    assert.ok(!bare.body.includes('acme'));
+    const bad = { Authorization: `Basic ${Buffer.from('admin:wrong').toString('base64')}` };
+    const statuses = [];
+    for (let i = 0; i < 11; i++) statuses.push((await ctx.prodStats('/stats', { headers: bad })).statusCode);
+    assert.deepEqual(statuses, [...Array(10).fill(401), 429]);
+    // Locked for the rest of the minute, even with the right password; other IPs unaffected
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 429);
+    assert.equal((await ctx.prodStats('/api/stats/export', { headers: bad })).statusCode, 429);
+    assert.equal((await ctx.prodStats('/stats', { ip: TEST_IPS[1], headers: adminHeaders() })).statusCode, 200);
+    ctx.clock += 61000;
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 200);
+    assert.equal(ctx.events().length, 0, 'auth attempts are not visits');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats prod: the failed-login window is anchored on the first failure (no 20 guesses across a window boundary)', async () => {
+  const ctx = setupTracking();
+  try {
+    const bad = { Authorization: `Basic ${Buffer.from('admin:wrong').toString('base64')}` };
+    // A request without credentials (or a successful one) at t0 must not open the window
+    assert.equal((await ctx.prodStats('/stats')).statusCode, 401);
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 200);
+    ctx.clock += 59000;
+    for (let i = 0; i < 10; i++) assert.equal((await ctx.prodStats('/stats', { headers: bad })).statusCode, 401);
+    ctx.clock += 1100; // past t0 + 60 s, but 1.1 s after the first failure
+    assert.equal((await ctx.prodStats('/stats', { headers: bad })).statusCode, 429);
+    // The window expires 60 s after the first failure
+    ctx.clock += 59000;
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 200);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('staging log defaults next to an injected analyticsFile, never the real /etc/sdrnow file', async () => {
+  const { baseTmp, stagingDir, prodDir } = setupTestDirs();
+  const analyticsFile = path.join(baseTmp, 'logs', 'analytics.jsonl');
+  try {
+    const handler = createRequestHandler({
+      stagingDir, prodDir, adminUser: TEST_ADMIN_USER, adminPassSha256: TEST_ADMIN_PASS_SHA256, secret: TEST_SECRET, analyticsFile,
+    });
+    const res = await mockRequest(handler, '/', { headers: { Host: 'staging.sdrnow.fr', 'User-Agent': IPHONE_UA, ...adminHeaders() } });
+    assert.equal(res.statusCode, 200);
+    const sibling = path.join(baseTmp, 'logs', 'analytics-staging.jsonl');
+    assert.equal(JSON.parse(fs.readFileSync(sibling, 'utf8').trim()).tester, 'admin');
+    assert.equal(fs.existsSync(analyticsFile), false);
+  } finally {
+    cleanupDirs(baseTmp);
+  }
+});
+
+test('export prod: sdrnow.fr/api/stats/export streams analytics.jsonl as an attachment (admin), 401 without auth', async () => {
+  const ctx = setupTracking();
+  try {
+    const missing = await ctx.prodStats('/api/stats/export', { headers: adminHeaders() });
     assert.equal(missing.statusCode, 200);
     assert.equal(missing.body, '');
     await ctx.prod('/pour/acme');
-    const res = await mockRequest(ctx.handler, '/api/stats/export', { headers: { Host: 'staging.sdrnow.fr', ...adminHeaders() } });
+    const res = await ctx.prodStats('/api/stats/export', { headers: adminHeaders() });
     assert.equal(res.statusCode, 200);
     assert.match(res.headers['content-disposition'], /^attachment; filename="analytics\.jsonl"$/);
+    assert.equal(res.headers['x-robots-tag'], 'noindex, nofollow');
     assert.equal(res.body, fs.readFileSync(ctx.analyticsFile, 'utf8'));
+    const anon = await ctx.prodStats('/api/stats/export');
+    assert.equal(anon.statusCode, 401);
+    assert.equal(anon.body, '401 Unauthorized');
+    // Staging export only ever returns the staging log
+    const staging = await ctx.staging('/api/stats/export');
+    assert.equal(staging.statusCode, 200);
+    assert.match(staging.headers['content-disposition'], /filename="analytics-staging\.jsonl"/);
+    assert.equal(staging.body, '');
     const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
-    const ro = await mockRequest(ctx.handler, `/api/stats/export?preview=${token}`, { headers: { Host: 'staging.sdrnow.fr' } });
-    assert.equal(ro.statusCode, 403);
+    assert.equal((await ctx.staging(`/api/stats/export?preview=${token}`, { auth: null })).statusCode, 403);
   } finally {
     ctx.cleanup();
   }
@@ -1450,8 +1568,8 @@ test('tracking: after a restart, /stats figures are rebuilt from analytics.jsonl
     await ctx.prod('/assets/logo.svg', { ip: TEST_IPS[3], ua: MAC_UA });
     ctx.tracker.stopTimers();
     const restarted = ctx.makeTracker();
-    const handler = ctx.makeHandler(restarted);
-    const page = await mockRequest(handler, '/stats', { headers: { Host: 'staging.sdrnow.fr', ...adminHeaders() } });
+    ctx.handler = ctx.makeHandler(restarted);
+    const page = await ctx.prodStats('/stats', { headers: adminHeaders() });
     assert.match(page.body, /acme/);
     const stats = restarted.stats('today');
     assert.equal(stats.prospects.length, 1);
@@ -1463,19 +1581,138 @@ test('tracking: after a restart, /stats figures are rebuilt from analytics.jsonl
   }
 });
 
-test('tracking: staging host keeps /rdv/* and POST /health neutral (no auth, no log)', async () => {
+test('staging test visit: admin opens /pour/acme + logo + POST /health -> analytics-staging.jsonl, tier 3, tester admin; nothing in prod', async () => {
   const ctx = setupTracking();
   try {
-    const cta = await mockRequest(ctx.handler, '/rdv/starter', { headers: { Host: 'staging.sdrnow.fr' } });
+    const page = await ctx.staging('/pour/acme');
+    assert.equal(page.statusCode, 200);
+    assert.equal(page.headers['x-robots-tag'], 'noindex, nofollow');
+    assert.ok(page.body.includes('<script src="/__editor.js"></script>'), 'same staging page as /, editor included for admin');
+    const logo = await ctx.staging('/assets/logo.svg');
+    assert.equal(logo.statusCode, 200);
+    assert.equal(logo.headers['cache-control'], 'no-cache');
+    assert.ok(logo.headers.etag);
+    assert.equal((await ctx.staging('/assets/logo.svg', { headers: { 'If-None-Match': logo.headers.etag } })).statusCode, 304);
+    const health = await ctx.staging('/health', { method: 'POST', body: { e: 'init', p: '/pour/acme' } });
+    assert.equal(health.statusCode, 204);
+    assert.equal((await ctx.staging('/health', { method: 'POST', body: { e: 'nope' } })).statusCode, 400);
+
+    const evs = ctx.stagingEvents();
+    assert.deepEqual(evs.map((e) => e.event), ['pageview', 'render', 'init']);
+    assert.ok(evs.every((e) => e.slug === 'acme' && e.tester === 'admin'));
+    assert.equal(evs.at(-1).tier, 3);
+    assert.equal(fs.existsSync(ctx.analyticsFile), false, 'nothing in analytics.jsonl');
+
+    // Another Basic Auth user is recorded under its own name; HTML pages are logged too
+    await ctx.staging('/en/', { auth: 'client', ip: TEST_IPS[1], ua: MAC_UA });
+    const last = ctx.stagingEvents().at(-1);
+    assert.deepEqual([last.event, last.target, last.tester, last.lang], ['pageview', '/en/', 'client', 'en']);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('staging preview test: reviewer (preview cookie) opens / then /rdv/starter -> tester preview, 302 to the target', async () => {
+  const ctx = setupTracking();
+  try {
+    const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    const home = await ctx.staging('/', { auth: null, preview: token });
+    assert.equal(home.statusCode, 200);
+    assert.ok(!home.body.includes('/__editor.js'));
+    const cta = await ctx.staging('/rdv/starter', { auth: null, preview: token });
     assert.equal(cta.statusCode, 302);
     assert.equal(cta.headers.location, CTA.starter);
-    const book = await mockRequest(ctx.handler, '/en/book/discovery', { headers: { Host: 'staging.sdrnow.fr' } });
-    assert.equal(book.headers.location, CTA.hero);
-    const health = await mockRequest(ctx.handler, '/health', { method: 'POST', body: { e: 'init' }, headers: { Host: 'staging.sdrnow.fr' } });
-    assert.equal(health.statusCode, 204);
+    assert.equal(cta.headers['cache-control'], 'no-store');
+    assert.deepEqual(ctx.stagingEvents().map((e) => [e.event, e.target, e.tester]), [
+      ['pageview', '/', 'preview'],
+      ['cta_click', 'starter', 'preview'],
+    ]);
     assert.equal(fs.existsSync(ctx.analyticsFile), false);
-    // Staging pages remain behind the gate
-    assert.equal((await mockRequest(ctx.handler, '/', { headers: { Host: 'staging.sdrnow.fr' } })).statusCode, 401);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('staging unauthenticated: POST /health, GET /rdv/starter, prospect link and logo -> 401, nothing logged', async () => {
+  const ctx = setupTracking();
+  try {
+    for (const [url, opts] of [
+      ['/health', { method: 'POST', body: { e: 'init' } }],
+      ['/rdv/starter', {}],
+      ['/en/book/discovery', {}],
+      ['/pour/acme', {}],
+      ['/assets/logo.svg', {}],
+      ['/', {}],
+    ]) {
+      const res = await ctx.staging(url, { auth: null, ...opts });
+      assert.equal(res.statusCode, 401, url);
+      assert.match(res.headers['www-authenticate'], /^Basic realm=/);
+    }
+    const bad = await ctx.staging('/rdv/starter', { auth: null, headers: { Authorization: `Basic ${Buffer.from('admin:nope').toString('base64')}` } });
+    assert.equal(bad.statusCode, 401);
+    assert.equal(fs.existsSync(ctx.stagingAnalyticsFile), false);
+    assert.equal(fs.existsSync(ctx.analyticsFile), false);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats staging: staging.sdrnow.fr/stats shows only the staging test log with testers; each /stats shows only its own site', async () => {
+  const ctx = setupTracking();
+  try {
+    // Staging: admin tests a prospect link, a reviewer and an admin browse the home page
+    await ctx.staging('/pour/staging-only');
+    await ctx.staging('/assets/logo.svg');
+    const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    await ctx.staging('/', { auth: null, preview: token, ip: TEST_IPS[1] });
+    await ctx.staging('/assets/logo.svg', { auth: null, preview: token, ip: TEST_IPS[1] });
+    await ctx.staging('/', { ip: TEST_IPS[2], ua: MAC_UA });
+    await ctx.staging('/assets/logo.svg', { ip: TEST_IPS[2], ua: MAC_UA });
+    // Prod: a real prospect
+    await ctx.prod('/pour/prod-only');
+    await ctx.prod('/assets/logo.svg');
+
+    const staging = await ctx.staging('/stats');
+    assert.equal(staging.statusCode, 200);
+    assert.equal(staging.headers['cache-control'], 'no-store');
+    assert.match(staging.body, /Données affichées : Staging — visites de test/);
+    assert.match(staging.body, /href="https:\/\/sdrnow\.fr\/stats">Voir Prod — sdrnow\.fr/);
+    assert.match(staging.body, /staging-only/);
+    assert.ok(!staging.body.includes('prod-only'), 'no production visit on the staging page');
+    assert.match(staging.body, /👤 admin<\/span>/, 'tester shown in the radar');
+    assert.match(staging.body, /👤 admin ×1 • preview ×1/, 'testers under the visitors KPI');
+    assert.match(staging.body, /https:\/\/staging\.sdrnow\.fr\/pour\//, 'link generator targets staging');
+
+    const prod = await ctx.prodStats('/stats', { headers: adminHeaders() });
+    assert.match(prod.body, /prod-only/);
+    assert.ok(!prod.body.includes('staging-only'), 'no staging visit on the production page');
+    assert.ok(!prod.body.includes('👤'));
+    assert.match(prod.body, /https:\/\/sdrnow\.fr\/pour\//);
+
+    const token2 = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    assert.equal((await ctx.staging(`/stats?preview=${token2}`, { auth: null })).statusCode, 403);
+    assert.equal((await ctx.staging('/stats', { auth: null })).statusCode, 401);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('no email from staging: 120 s idle after a test visit on /pour/acme, and the midnight rotation, never call sendEmail', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.staging('/pour/acme');
+    await ctx.staging('/assets/logo.svg');
+    await ctx.staging('/health', { method: 'POST', body: { e: 'init', p: '/pour/acme' } });
+    await ctx.staging('/rdv/starter');
+    assert.equal(ctx.stagingTracker.hasPendingAlert('acme'), false, 'no alert timer armed on staging');
+    await sleep(90); // > debounce (40 ms, stands for 120 s)
+    ctx.stagingTracker.flushAlerts();
+    ctx.clock = Date.parse('2026-10-20T22:00:30Z'); // midnight Paris: digest of the day
+    assert.equal(ctx.stagingTracker.rotateIfNeeded(), true);
+    await ctx.stagingTracker.whenIdle();
+    await ctx.tracker.whenIdle();
+    assert.equal(ctx.sent.length, 0, 'sendEmail never called by the staging tracker');
+    assert.ok(ctx.stagingEvents().length >= 4);
   } finally {
     ctx.cleanup();
   }
@@ -1489,8 +1726,8 @@ test('tracking: prod host is public static (no staging gate, no editor), and no 
     assert.ok(!home.body.includes('/__editor.js'));
     assert.equal((await ctx.prod('/en/legal-notice/')).statusCode, 200);
     assert.equal((await ctx.prod('/translations.json')).statusCode, 200);
-    assert.equal((await ctx.prod('/stats')).statusCode, 404);
     assert.equal((await ctx.prod('/api/translations')).statusCode, 404);
+    assert.equal((await ctx.prod('/api/staging', { method: 'POST', body: {} })).statusCode, 405);
     assert.equal((await ctx.prod('/../staging/index.html')).statusCode, 404);
     const www = await mockRequest(ctx.handler, '/pour/acme', { headers: { Host: 'www.sdrnow.fr:443', 'User-Agent': IPHONE_UA } });
     assert.equal(www.statusCode, 200);

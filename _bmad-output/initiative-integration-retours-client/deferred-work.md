@@ -1,0 +1,3 @@
+- source_plan: `/Users/sylvaintenier/Progra/sdrnow/_bmad-output/initiative-integration-retours-client/plan-stats-prod-staging.md`
+  summary: Capter les emails de test et de prod (en attendant TEM) avec une instance Mailpit partagée (UI `staging.sdrnow.fr/mail/`, envoi via `POST /api/v1/send`, tags staging/prod) et tenir un journal d'envoi local `/etc/sdrnow/email-log.jsonl` affiché dans `/stats`, avec copie Mailpit des envois TEM et identifiant TEM pour croiser plus tard les statuts de livraison.
+  evidence: Découpé à la demande de l'utilisateur (2 PR) ; l'API TEM expose statut/tentatives/bounces mais pas le contenu ni de durée de conservation documentée, d'où le journal local + Mailpit.

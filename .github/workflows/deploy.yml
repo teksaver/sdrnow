@@ -151,6 +151,7 @@ jobs:
             "PROD_DIR=/var/www/html" \
             "EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js" \
             "ANALYTICS_FILE=/etc/sdrnow/analytics.jsonl" \
+            "STAGING_ANALYTICS_FILE=/etc/sdrnow/analytics-staging.jsonl" \
             "CTA_TARGET_HERO=${{ vars.CTA_TARGET_HERO }}" \
             "CTA_TARGET_STARTER=${{ vars.CTA_TARGET_STARTER }}" \
             "CTA_TARGET_STRATEGY=${{ vars.CTA_TARGET_STRATEGY }}" > /tmp/staging.env
