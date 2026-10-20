@@ -278,7 +278,6 @@
       : state.lastActiveInput;
 
     if (!activeInput) {
-      btnEm.setAttribute('aria-pressed', 'false');
       btnEm.style.background = TOKENS.chromeBg;
       btnEm.style.color = TOKENS.primary;
       return;
@@ -286,7 +285,6 @@
 
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount || !activeInput.contains(selection.getRangeAt(0).commonAncestorContainer)) {
-      btnEm.setAttribute('aria-pressed', 'false');
       btnEm.style.background = TOKENS.chromeBg;
       btnEm.style.color = TOKENS.primary;
       return;
@@ -322,9 +320,7 @@
       }
     }
 
-    const pressedVal = isAllEm ? 'true' : (isMixed ? 'mixed' : 'false');
-    btnEm.setAttribute('aria-pressed', pressedVal);
-
+    // Visual hint only: Emphase is an action, not a toggle, so no aria-pressed
     if (isAllEm) {
       btnEm.style.background = TOKENS.primarySoft;
       btnEm.style.color = TOKENS.primaryHover;
@@ -339,21 +335,17 @@
 
   // --- Format Action (Flatten -> Apply -> Reserialize) ---
   function applyFormat(isEmphasis) {
-    const activeInput = (document.activeElement && document.activeElement.classList.contains('sdrnow-input-area'))
-      ? document.activeElement
-      : (state.lastActiveInput || document.getElementById(`sdrnow-input-${state.currentLang}`));
-
-    if (!activeInput) return;
-    activeInput.focus();
-
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount) return;
     const range = selection.getRangeAt(0);
 
-    // E10: Silently ignore if selection is outside activeInput
-    if (!activeInput.contains(range.commonAncestorContainer)) {
-      return;
-    }
+    // E10: act only on a selection already inside a drawer field. Never refocus a field first:
+    // the browser would put the caret at position 0 and Normal would strip an emphasis there.
+    const container = range.commonAncestorContainer;
+    const containerEl = container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement;
+    const activeInput = containerEl ? containerEl.closest('.sdrnow-input-area') : null;
+    if (!activeInput) return;
+    activeInput.focus();
 
     if (!emphasisModel) return;
     const { tokens, start, end } = domToTokens(activeInput, range);
@@ -476,7 +468,7 @@
 
         <!-- Semantic Format Toolbar -->
         <div id="sdrnow-format-toolbar" style="display: flex; align-items: center; gap: 6px;">
-          <button id="sdrnow-btn-em" type="button" aria-pressed="false" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.primary}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
+          <button id="sdrnow-btn-em" type="button" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.primary}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
             🔶 Emphase · orange
           </button>
           <button id="sdrnow-btn-normal" type="button" title="Remettre la sélection en texte normal (Cmd/Ctrl + \)" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.chromeMuted}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 500; cursor: pointer;">

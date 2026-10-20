@@ -82,7 +82,7 @@ Spécifications comportementales (les spécifications visuelles résident dans `
 
 - **Contraste WCAG AA/AAA :** Tous les textes de l'`Admin Top Pill` et du `Bilingual Bottom Drawer` respectent un ratio `>= 6.2:1` (`{colors.chrome-text}` et `{colors.chrome-muted}` sur `{colors.chrome-bg}`).
 - **Navigation clavier :** `Tab` dans le tiroir passe directement du champ `🇫🇷 Français` au champ `🇬🇧 English` (ce qui bascule aussi la langue de la page en direct), puis aux boutons de la `Semantic Format Toolbar`. `Esc` referme le tiroir et rend le focus au bloc `[data-i18n]` dans la page.
-- **Annonces ARIA :** Les régions `Sync Status Toast` portent `role="status" aria-live="polite"` ; les erreurs de champ vide portent `role="alert"`. Les boutons de formatage portent `aria-pressed="true|false"`.
+- **Annonces ARIA :** Les régions `Sync Status Toast` portent `role="status" aria-live="polite"` ; les erreurs de champ vide portent `role="alert"`. Les boutons Emphase et Normal sont des actions (non basculantes) : pas d'`aria-pressed`, l'état de la sélection n'est qu'un indice visuel.
 
 ## Responsive & Platform
 

@@ -89,7 +89,7 @@ NEW :
 
 - Le bouton Emphase n'est **plus une bascule**. Il met toujours en emphase, et « Normal » remet toujours en normal. Le résultat ne dépend donc jamais de l'état antérieur de la sélection.
 - **Libellé dynamique** selon le rendu du bloc : « Emphase · orange », « Emphase · soulignée », « Emphase · gras ». Le cas codé en dur `key === 'pricing.title'` (l.491) disparaît au profit de la dérivation de P4.
-- **État visuel des boutons :** `aria-pressed="true"` sur Emphase si toute la sélection est en emphase, `"mixed"` si elle l'est en partie, `"false"` sinon.
+- **État visuel des boutons :** le bouton Emphase est mis en évidence si toute la sélection est en emphase, à moitié si elle l'est en partie (indice visuel uniquement, sans `aria-pressed`, puisque ce n'est pas une bascule — amendé en revue le 2026-10-20).
 - **Curseur sans sélection (caret) :** Emphase ne fait rien. Normal retire l'emphase de tout le segment `<em>` contenant le curseur, comme aujourd'hui.
 
 *Rationale :* un seul concept sémantique et deux verbes sans ambiguïté, même sur une sélection mixte.
