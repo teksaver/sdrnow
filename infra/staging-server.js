@@ -21,12 +21,14 @@ const PROD_DIR = process.env.PROD_DIR || '/var/www/html';
 const EDITOR_SCRIPT_PATH = process.env.EDITOR_SCRIPT_PATH || path.join(__dirname, 'editor-client.js');
 // Cookieless tracking & Scaleway TEM (spec cookieless-server-tracking)
 const ANALYTICS_FILE = process.env.ANALYTICS_FILE || '/etc/sdrnow/analytics.jsonl';
+// Test visits of staging.sdrnow.fr: separate log, never mixed with production
+const STAGING_ANALYTICS_FILE = process.env.STAGING_ANALYTICS_FILE || '/etc/sdrnow/analytics-staging.jsonl';
 const TEM_SECRET_KEY = process.env.TEM_SECRET_KEY || '';
 const TEM_PROJECT_ID = process.env.SCW_DEFAULT_PROJECT_ID || '';
 const TEM_REGION = process.env.TEM_REGION || 'fr-par';
 const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO || 'jcm@sdrnow.fr';
 const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || 'alertes@sdrnow.fr';
-const STATS_URL = process.env.STATS_URL || 'https://staging.sdrnow.fr/stats';
+const STATS_URL = process.env.STATS_URL || 'https://sdrnow.fr/stats';
 
 // --- Helper Utilities ---
 
@@ -633,6 +635,9 @@ const PROSPECT_ROUTE_RE = /^\/(pour|offre|en\/for|en\/offer)\/([^/]+)\/?$/;
 const CTA_ROUTE_RE = /^\/(rdv|en\/book)\/([^/]+)\/?$/;
 const WITNESS_ASSET = '/assets/logo.svg';
 const LEGAL_PATH_RE = /^\/(mentions-legales|en\/legal-notice)\/?$/;
+// Production stats routes (Basic Auth admin, never counted as visits)
+const PROD_STATS_PATHS = new Set(['/stats', '/stats/', '/api/stats/export']);
+const PROD_STATS_MAX_AUTH_FAILURES = 10; // per minute and per IP, then 429
 
 export function getCtaTargets(env = process.env) {
   const targets = { hero: DEFAULT_CTA_TARGET, starter: DEFAULT_CTA_TARGET, strategy: DEFAULT_CTA_TARGET };
@@ -909,11 +914,12 @@ export function aggregateVisitors(events) {
     const key = `${ev.date}|${ev.anon_id}`;
     let v = visitors.get(key);
     if (!v) {
-      v = { key, date: ev.date, anon_id: ev.anon_id, tier: 1, slugs: new Set(), events: [], ua_family: ev.ua_family || '', referer: null };
+      v = { key, date: ev.date, anon_id: ev.anon_id, tier: 1, slugs: new Set(), testers: new Set(), events: [], ua_family: ev.ua_family || '', referer: null };
       visitors.set(key, v);
     }
     v.tier = Math.max(v.tier, Number(ev.tier) || 1);
     if (ev.slug) v.slugs.add(ev.slug);
+    if (ev.tester) v.testers.add(ev.tester); // staging only: Basic Auth user or "preview"
     if (ev.ua_family) v.ua_family = ev.ua_family;
     if (ev.event === 'pageview' && v.referer === null) v.referer = ev.referer || '';
     v.events.push(ev);
@@ -979,6 +985,11 @@ export function computeStats(events, { period = 'today', today, ctaKeys = ['hero
     origins.set(v.origin, o);
   }
 
+  // Staging testers (anonymous human visitors per tester name)
+  const testerCounts = new Map();
+  for (const v of anonHumans) for (const t of v.testers) testerCounts.set(t, (testerCounts.get(t) || 0) + 1);
+  const testers = [...testerCounts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
   // Radar prospects: one row per slug with at least one human visitor
   const bySlug = new Map();
   for (const v of humans) {
@@ -1008,6 +1019,7 @@ export function computeStats(events, { period = 'today', today, ctaKeys = ['hero
       origin: list.map((v) => v.origin).find((o) => o !== 'Accès direct / Messagerie') || 'Accès direct / Messagerie',
       adblockOnly: list.every((v) => v.tier === 2),
       signals: summarizeSignals(evs),
+      testers: [...new Set(evs.map((e) => e.tester).filter(Boolean))],
     });
   }
   prospects.sort((a, b) => Date.parse(b.lastTs || 0) - Date.parse(a.lastTs || 0));
@@ -1031,6 +1043,7 @@ export function computeStats(events, { period = 'today', today, ctaKeys = ['hero
     funnel,
     origins: [...origins.values()].sort((a, b) => b.visitors - a.visitors),
     prospects,
+    testers,
     anonVisitors: anonHumans,
   };
 }
@@ -1255,8 +1268,10 @@ export function createTracker(options = {}) {
   const ctaTargets = options.ctaTargets || getCtaTargets();
   const recipients = parseRecipients(options.alertRecipients ?? ALERT_EMAIL_TO);
   const sendEmail = options.sendEmail || ((message) => sendTemEmail(message));
-  // Emails stay dormant until a TEM key is provisioned (TEM offer not yet active on the project)
-  const emailEnabled = Boolean(options.sendEmail) || Boolean(TEM_SECRET_KEY && TEM_PROJECT_ID);
+  // Emails stay dormant until a TEM key is provisioned (TEM offer not yet active on the project);
+  // emailsDisabled (staging tracker): never any alert nor digest, whatever the configuration
+  const emailsDisabled = Boolean(options.emailsDisabled);
+  const emailEnabled = !emailsDisabled && (Boolean(options.sendEmail) || Boolean(TEM_SECRET_KEY && TEM_PROJECT_ID));
   const now = options.now || Date.now;
   const debounceMs = options.debounceMs ?? 120000;
   const statsUrl = options.statsUrl || STATS_URL;
@@ -1371,7 +1386,7 @@ export function createTracker(options = {}) {
     visitors = new Map();
     rateLimits = new Map();
     dropUnarmedAlerts();
-    track(sendDigest(previous).catch((err) => console.error('[TEM] Digest impossible :', err.message)));
+    if (!emailsDisabled) track(sendDigest(previous).catch((err) => console.error('[TEM] Digest impossible :', err.message)));
     return true;
   }
 
@@ -1426,6 +1441,7 @@ export function createTracker(options = {}) {
     return { anon, state };
   }
 
+  // fields.tester (staging only): who ran the test; absent from production records
   function logEvent(anon, state, event, fields = {}) {
     const record = {
       ts: new Date(now()).toISOString(),
@@ -1440,25 +1456,26 @@ export function createTracker(options = {}) {
       referer: fields.referer ?? null,
       ua_family: state.uaFamily,
     };
+    if (fields.tester) record.tester = String(fields.tester).slice(0, 64);
     append(record);
-    if (record.slug && !state.bot) trackAlert(record, state);
+    if (record.slug && !state.bot && !emailsDisabled) trackAlert(record, state);
     return record;
   }
 
-  function recordPageview(req, { path: pagePath, slug = null }) {
+  function recordPageview(req, { path: pagePath, slug = null, tester = null }) {
     const { anon, state } = visit(req);
     if (slug) state.slug = slug; // anon_id -> slug, kept in RAM for the day
     state.pendingRender = true;
-    return logEvent(anon, state, 'pageview', { target: pagePath, lang: langFromPath(pagePath), referer: refererHost(req) });
+    return logEvent(anon, state, 'pageview', { target: pagePath, lang: langFromPath(pagePath), referer: refererHost(req), tester });
   }
 
-  function recordRender(req) {
+  function recordRender(req, { tester = null } = {}) {
     // Witness asset loaded after an HTML page: proof of a real rendering browser
     const { anon, state } = visit(req, { create: false });
     if (!state || !state.pendingRender) return null;
     state.pendingRender = false;
     if (!state.bot && state.tier < 2) state.tier = 2;
-    return logEvent(anon, state, 'render');
+    return logEvent(anon, state, 'render', { tester });
   }
 
   function checkRateLimit(req) {
@@ -1477,7 +1494,7 @@ export function createTracker(options = {}) {
     return entry.count <= HEALTH_RATE_LIMIT_PER_MIN;
   }
 
-  function recordHealth(req, payload) {
+  function recordHealth(req, payload, { tester = null } = {}) {
     const { anon, state } = visit(req);
     if (!state.bot) state.tier = 3;
     state.pendingRender = false;
@@ -1485,12 +1502,12 @@ export function createTracker(options = {}) {
     const t = typeof payload.t === 'string' ? payload.t.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) : '';
     const dRaw = Number(payload.d);
     const duration = payload.e === 'ping' && Number.isFinite(dRaw) ? Math.min(Math.max(Math.round(dRaw), 0), 86400) : null;
-    return logEvent(anon, state, payload.e, { target: t || null, duration, lang: p ? langFromPath(p) : null });
+    return logEvent(anon, state, payload.e, { target: t || null, duration, lang: p ? langFromPath(p) : null, tester });
   }
 
-  function recordCta(req, key, lang) {
+  function recordCta(req, key, lang, { tester = null } = {}) {
     const { anon, state } = visit(req);
-    return logEvent(anon, state, 'cta_click', { target: key, lang, referer: refererHost(req) });
+    return logEvent(anon, state, 'cta_click', { target: key, lang, referer: refererHost(req), tester });
   }
 
   function stats(period) {
@@ -1517,6 +1534,7 @@ export function createTracker(options = {}) {
     analyticsFile,
     ctaTargets,
     recipients,
+    now,
     anonId,
     currentDate: () => currentDate,
     rotateIfNeeded,
@@ -1593,7 +1611,7 @@ function renderProspectRow(p, today) {
     : (s.contacts.size ? '<span class="muted-sm">Contact direct</span>' : '<span class="muted-sm">—</span>');
   const reading = s.hasTelemetry ? `<strong>${formatDuration(s.duration)}</strong>` : '<span class="na">N/A (Sans JS)</span>';
   return `<tr${hot ? ' class="hot-row"' : ''}>
-<td><span class="slug-pill"><span class="slug-path">${escapeHtmlAttr(p.pathPrefix)}</span>${escapeHtmlAttr(p.slug)}</span></td>
+<td><span class="slug-pill"><span class="slug-path">${escapeHtmlAttr(p.pathPrefix)}</span>${escapeHtmlAttr(p.slug)}</span>${p.testers && p.testers.length ? `<br><span class="muted-sm">👤 ${escapeHtmlAttr(p.testers.join(', '))}</span>` : ''}</td>
 <td><strong>${escapeHtmlAttr(formatLastVisit(p.lastTs, today))}</strong><br><span class="muted-sm">${escapeHtmlAttr(p.origin)} • ${escapeHtmlAttr(p.families.join(' + '))}</span></td>
 <td>${devices} ${revisit}<br><span class="muted-sm">${plural(p.sessions, 'session', 'sessions')}</span></td>
 <td>${reading}</td>
@@ -1602,7 +1620,27 @@ function renderProspectRow(p, today) {
 </tr>`;
 }
 
-export function renderStatsPage(stats, { ctaTargets = {} } = {}) {
+// Each site shows its own stats: sdrnow.fr/stats (production) and staging.sdrnow.fr/stats (test visits)
+const STATS_ENVS = {
+  prod: {
+    label: 'Prod — sdrnow.fr',
+    detail: 'Visites réelles du site public',
+    origin: 'https://sdrnow.fr',
+    editorUrl: 'https://staging.sdrnow.fr/',
+    other: { label: 'Staging — visites de test', url: 'https://staging.sdrnow.fr/stats' },
+  },
+  staging: {
+    label: 'Staging — visites de test',
+    detail: 'Visites de staging.sdrnow.fr par les testeurs authentifiés • aucun email envoyé',
+    origin: 'https://staging.sdrnow.fr',
+    editorUrl: '/',
+    other: { label: 'Prod — sdrnow.fr', url: 'https://sdrnow.fr/stats' },
+  },
+};
+
+export function renderStatsPage(stats, { ctaTargets = {}, env = 'prod' } = {}) {
+  const site = STATS_ENVS[env] || STATS_ENVS.prod;
+  const isStaging = env === 'staging';
   const periodLabel = (STATS_PERIODS.find(([k]) => k === stats.period) || STATS_PERIODS[0])[1];
   const pills = STATS_PERIODS.map(([key, label]) =>
     `<a class="period-pill${key === stats.period ? ' active' : ''}" href="/stats?period=${key}"${key === stats.period ? ' aria-current="page"' : ''}>${escapeHtmlAttr(label)}</a>`
@@ -1610,7 +1648,10 @@ export function renderStatsPage(stats, { ctaTargets = {} } = {}) {
 
   const rows = stats.prospects.length
     ? stats.prospects.map((p) => renderProspectRow(p, stats.today)).join('\n')
-    : `<tr><td colspan="6" class="empty">🎯 Aucun lien prospect visité sur cette période. Envoyez un premier lien <code>https://sdrnow.fr/pour/nom-prospect</code> dans vos messages, ou préparez-le avec le copieur rapide ci-dessus.</td></tr>`;
+    : `<tr><td colspan="6" class="empty">🎯 Aucun lien prospect visité sur cette période. ${isStaging ? 'Ouvrez un lien de test' : 'Envoyez un premier lien'} <code>${site.origin}/pour/nom-prospect</code>${isStaging ? '' : ' dans vos messages'}, ou préparez-le avec le copieur rapide ci-dessus.</td></tr>`;
+  const testersLine = (stats.testers || []).length
+    ? `<div class="stat-box-sub">👤 ${stats.testers.map((t) => `${escapeHtmlAttr(t.name)} ×${t.count}`).join(' • ')}</div>`
+    : '';
 
   const funnelLabels = {
     hero: 'Bouton Hero haut de page (30 min)',
@@ -1646,8 +1687,8 @@ export function renderStatsPage(stats, { ctaTargets = {} } = {}) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<title>Radar &amp; Stats - SDRnow</title>
-<link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+<title>Radar &amp; Stats (${isStaging ? 'Staging' : 'Prod'}) - SDRnow</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23F26522'/%3E%3C/svg%3E">
 <style>
 :root{--primary:#F26522;--primary-soft:#FFF3ED;--chrome-bg:#111827;--chrome-surface:#1F2937;--chrome-border:#374151;--chrome-text:#F9FAFB;--chrome-muted:#9CA3AF;--page-bg:#F9FAFB;--card-bg:#FFFFFF;--text-main:#111827;--text-muted:#4B5563;--border:#E5E7EB}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1715,6 +1756,12 @@ table.radar-table{width:100%;border-collapse:collapse;font-size:13.5px}
 .offer-bar-head{display:flex;justify-content:space-between;gap:12px;font-size:13px;font-weight:600;margin-bottom:4px;flex-wrap:wrap}
 .offer-bar-track{height:10px;background:#F3F4F6;border-radius:9999px;overflow:hidden}
 .offer-bar-fill{height:100%;border-radius:9999px}
+.env-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:10px 28px;font-size:13px;border-bottom:1px solid var(--border)}
+.env-bar.env-prod{background:var(--primary-soft);color:#7C2D12}
+.env-bar.env-staging{background:#FEF3C7;color:#78350F}
+.env-name{font-weight:800}
+.env-bar a{color:inherit;font-weight:700}
+@media (max-width:820px){.env-bar{padding:10px 16px}}
 </style>
 </head>
 <body>
@@ -1722,7 +1769,7 @@ table.radar-table{width:100%;border-collapse:collapse;font-size:13.5px}
   <div class="admin-brand">
     <div class="admin-brand-logo">SDR<span>now</span></div>
     <nav class="admin-nav-pills" aria-label="Administration">
-      <a href="/" class="admin-nav-pill">✏️ Éditeur de textes</a>
+      <a href="${site.editorUrl}" class="admin-nav-pill">✏️ Éditeur de textes</a>
       <a href="/stats" class="admin-nav-pill active" aria-current="page">📡 Radar &amp; Stats</a>
     </nav>
   </div>
@@ -1732,21 +1779,26 @@ table.radar-table{width:100%;border-collapse:collapse;font-size:13.5px}
   </nav>
 </header>
 
+<div class="env-bar env-${isStaging ? 'staging' : 'prod'}" role="note">
+  <div><span class="env-name">${isStaging ? '🧪' : '🌐'} Données affichées : ${escapeHtmlAttr(site.label)}</span> • ${escapeHtmlAttr(site.detail)}</div>
+  <a href="${site.other.url}">Voir ${escapeHtmlAttr(site.other.label)} →</a>
+</div>
+
 <div class="link-gen-bar">
   <div class="link-gen-left">
     <label for="slug-input">🔗 Créer un lien prospect à la volée :</label>
-    <span class="link-input-group"><span class="link-prefix">https://sdrnow.fr/pour/</span><input id="slug-input" type="text" class="link-slug-input" placeholder="nom-prospect" maxlength="64" autocomplete="off" spellcheck="false"></span>
+    <span class="link-input-group"><span class="link-prefix">${site.origin}/pour/</span><input id="slug-input" type="text" class="link-slug-input" placeholder="nom-prospect" maxlength="64" autocomplete="off" spellcheck="false"></span>
     <button type="button" class="btn-copy" id="copy-fr">Copier le lien FR</button>
     <button type="button" class="btn-copy secondary" id="copy-en">Copier EN (/en/for/…)</button>
   </div>
-  <div class="hint">💡 Astuce : vous pouvez aussi taper directement <code>sdrnow.fr/pour/nom-client</code> dans vos messages sans passer par ici.</div>
+  <div class="hint">💡 Astuce : vous pouvez aussi taper directement <code>${site.origin.replace('https://', '')}/pour/nom-client</code> ${isStaging ? 'dans votre navigateur' : 'dans vos messages'} sans passer par ici.</div>
 </div>
 
 <main class="dash-content">
   <section class="dash-section">
     <div class="dash-section-header">
       <h2 class="dash-section-title">🎯 1. Radar Prospects Identifiés (<code>/pour/&lt;slug&gt;</code> &amp; <code>/offre/&lt;slug&gt;</code>)</h2>
-      <div class="dash-section-sub">${escapeHtmlAttr(periodLabel)} • Trié par dernière activité • Alerte email après 2 min d'inactivité</div>
+      <div class="dash-section-sub">${escapeHtmlAttr(periodLabel)} • Trié par dernière activité • ${isStaging ? 'Aucune alerte email depuis staging' : "Alerte email après 2 min d'inactivité"}</div>
     </div>
     <div class="radar-card">
       <table class="radar-table">
@@ -1761,13 +1813,14 @@ ${rows}
   <section class="dash-section">
     <div class="dash-section-header">
       <h2 class="dash-section-title">📊 2. Audience Anonyme (<code>/</code> &amp; <code>/en</code>) &amp; Entonnoir par Carte d'Offre</h2>
-      <div class="dash-section-sub">Visiteurs reconnus le temps d'une journée, sans cookie • Bilan email à minuit si au moins 1 visite</div>
+      <div class="dash-section-sub">Visiteurs reconnus le temps d'une journée, sans cookie • ${isStaging ? 'Aucun bilan email depuis staging' : 'Bilan email à minuit si au moins 1 visite'}</div>
     </div>
     <div class="stats-grid-4">
       <div class="stat-box">
         <div class="stat-box-lbl">Visiteurs humains</div>
         <div class="stat-box-val">${stats.humans}</div>
         <div class="stat-box-sub"><strong>${stats.full}</strong> Télémétrie complète • <strong style="color:#B45309;">${stats.adblock} sous Adblock / Sans JS (${stats.adblockPct}%)</strong></div>
+        ${testersLine}
       </div>
       <div class="stat-box">
         <div class="stat-box-lbl">Ont lu jusqu'aux tarifs</div>
@@ -1827,9 +1880,9 @@ ${originRows}
     function fallback() { var ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); done(); }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, fallback); else fallback();
   }
-  btnFr.addEventListener('click', function () { copy(btnFr, 'https://sdrnow.fr/pour/'); });
-  btnEn.addEventListener('click', function () { copy(btnEn, 'https://sdrnow.fr/en/for/'); });
-  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); copy(btnFr, 'https://sdrnow.fr/pour/'); } });
+  btnFr.addEventListener('click', function () { copy(btnFr, '${site.origin}/pour/'); });
+  btnEn.addEventListener('click', function () { copy(btnEn, '${site.origin}/en/for/'); });
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); copy(btnFr, '${site.origin}/pour/'); } });
   refresh();
 })();
 </script>
@@ -1858,6 +1911,75 @@ export function createRequestHandler(options = {}) {
   const expectedPassHash = Buffer.from(adminPassSha256, 'hex');
   const tracker = options.tracker || createTracker(options);
   const ctaTargets = tracker.ctaTargets;
+  // Test visits of staging.sdrnow.fr: own log, own daily secret, never any email
+  const stagingTracker = options.stagingTracker || createTracker({
+    // Injected prod log (tests, tools): staging log next to it, never the real /etc/sdrnow file
+    analyticsFile: options.stagingAnalyticsFile
+      || (options.analyticsFile ? path.join(path.dirname(options.analyticsFile), 'analytics-staging.jsonl') : STAGING_ANALYTICS_FILE),
+    ctaTargets,
+    now: options.now,
+    emailsDisabled: true,
+  });
+  const clock = tracker.now || Date.now;
+
+  // Basic Auth check shared by the staging gate and the production /stats routes.
+  // Returns null without a Basic header, { ok: false } on bad credentials, { ok: true, user } otherwise.
+  function checkBasicAuth(req) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Basic ')) return null;
+    try {
+      const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+      const colonIdx = credentials.indexOf(':');
+      if (colonIdx === -1) return { ok: false };
+      const user = credentials.slice(0, colonIdx);
+      const pass = credentials.slice(colonIdx + 1);
+
+      const givenUserHash = crypto.createHash('sha256').update(user, 'utf8').digest();
+      const givenPassHash = crypto.createHash('sha256').update(pass, 'utf8').digest();
+
+      const isUserValid = expectedUserHashes.some(
+        (expectedHash) =>
+          givenUserHash.length === expectedHash.length &&
+          crypto.timingSafeEqual(givenUserHash, expectedHash)
+      );
+
+      if (
+        isUserValid &&
+        givenPassHash.length === expectedPassHash.length &&
+        crypto.timingSafeEqual(givenPassHash, expectedPassHash)
+      ) {
+        return { ok: true, user };
+      }
+    } catch {
+      // Malformed header: treated as bad credentials
+    }
+    return { ok: false };
+  }
+
+  // Production /stats: more than 10 failed logins per minute and per IP -> 429 (IP kept hashed, RAM only)
+  const authFailureKey = crypto.randomBytes(32);
+  const authFailures = new Map(); // hashed ip -> { start, count }
+  // The 60 s window is anchored on the first failure: only a counted failure opens / resets it
+  function authFailureKeyOf(req) {
+    return crypto.createHmac('sha256', authFailureKey).update(getClientIp(req)).digest('hex').slice(0, 16);
+  }
+  function isAuthLocked(req) {
+    const entry = authFailures.get(authFailureKeyOf(req));
+    return Boolean(entry) && clock() - entry.start < 60000 && entry.count >= PROD_STATS_MAX_AUTH_FAILURES;
+  }
+  function noteAuthFailure(req) {
+    const key = authFailureKeyOf(req);
+    const t = clock();
+    let entry = authFailures.get(key);
+    if (!entry || t - entry.start >= 60000) {
+      if (authFailures.size > 10000) {
+        for (const [k, e] of authFailures) if (t - e.start >= 60000) authFailures.delete(k);
+      }
+      entry = { start: t, count: 0 };
+      authFailures.set(key, entry);
+    }
+    entry.count += 1;
+  }
 
   function resolveCtaKey(segment) {
     const key = CTA_ALIASES[segment] || segment;
@@ -1869,8 +1991,8 @@ export function createRequestHandler(options = {}) {
     return res.end('404 Not Found');
   }
 
-  function readProdFile(relPath) {
-    const root = path.resolve(prodDir);
+  function readSiteFile(rootDir, relPath) {
+    const root = path.resolve(rootDir);
     const filePath = path.resolve(root, relPath);
     if (filePath !== root && !filePath.startsWith(root + path.sep)) return null;
     try {
@@ -1881,11 +2003,46 @@ export function createRequestHandler(options = {}) {
     }
   }
 
-  // Production traffic (Host sdrnow.fr / www.sdrnow.fr): public, never authenticated,
-  // never sets a cookie. Only GET page loads, the witness asset, /health and /rdv/* are logged.
-  async function handleProdRequest(req, res, pathname) {
+  function readProdFile(relPath) {
+    return readSiteFile(prodDir, relPath);
+  }
+
+  function sendStatsPage(req, res, parsedUrl, statsTracker, env) {
+    const requested = parsedUrl.searchParams.get('period');
+    const period = STATS_PERIODS.some(([key]) => key === requested) ? requested : 'today';
+    const html = renderStatsPage(statsTracker.stats(period), { ctaTargets, env });
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex, nofollow',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    });
+    return res.end(req.method === 'HEAD' ? undefined : html);
+  }
+
+  function sendStatsExport(res, statsTracker) {
+    let content = '';
+    try {
+      content = fs.readFileSync(statsTracker.analyticsFile, 'utf8');
+    } catch {
+      content = '';
+    }
+    res.writeHead(200, {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${path.basename(statsTracker.analyticsFile).replace(/[^\w.-]/g, '_')}"`,
+      'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex, nofollow',
+    });
+    return res.end(content);
+  }
+
+  // Tracked routes shared by production (public) and staging (behind the auth gate):
+  // prospect links, CTA redirects, the JS beacon and the witness asset. Returns false when
+  // the path is none of them. site = { tracker, dir, tester, decorateHtml }.
+  async function handleTrackedRoute(req, res, pathname, site) {
     const isGet = req.method === 'GET';
     const isRead = isGet || req.method === 'HEAD';
+    const tester = site.tester || null;
 
     // 1. Personalised prospect links: /pour/<slug>, /offre/<slug>, /en/for/<slug>, /en/offer/<slug>
     const prospect = PROSPECT_ROUTE_RE.exec(pathname);
@@ -1894,41 +2051,55 @@ export function createRequestHandler(options = {}) {
       try {
         rawSlug = decodeURIComponent(prospect[2]);
       } catch {
-        return sendNotFound(res);
+        sendNotFound(res);
+        return true;
       }
-      if (!SLUG_RE.test(rawSlug)) return sendNotFound(res);
+      if (!SLUG_RE.test(rawSlug)) {
+        sendNotFound(res);
+        return true;
+      }
       const lang = prospect[1].startsWith('en/') ? 'en' : 'fr';
-      const file = readProdFile(lang === 'en' ? 'en/index.html' : 'index.html');
-      if (!file) return sendNotFound(res);
-      if (isGet) tracker.recordPageview(req, { path: pathname, slug: rawSlug.toLowerCase() });
+      const file = readSiteFile(site.dir, lang === 'en' ? 'en/index.html' : 'index.html');
+      if (!file) {
+        sendNotFound(res);
+        return true;
+      }
+      if (isGet) site.tracker.recordPageview(req, { path: pathname, slug: rawSlug.toLowerCase(), tester });
       res.writeHead(200, {
         'Content-Type': MIME_TYPES['.html'],
         'Cache-Control': 'no-cache',
         'X-Robots-Tag': 'noindex, nofollow',
       });
-      return res.end(isGet ? file.content : undefined);
+      res.end(isGet ? (site.decorateHtml ? site.decorateHtml(file.content) : file.content) : undefined);
+      return true;
     }
 
     // 2. CTA routes: /rdv/<offre>, /en/book/<offer> -> 302 to the per-offer target
     const cta = CTA_ROUTE_RE.exec(pathname);
     if (cta && isRead) {
       const key = resolveCtaKey(cta[2]);
-      if (!key) return sendNotFound(res);
-      if (isGet) tracker.recordCta(req, key, cta[1] === 'rdv' ? 'fr' : 'en');
+      if (!key) {
+        sendNotFound(res);
+        return true;
+      }
+      if (isGet) site.tracker.recordCta(req, key, cta[1] === 'rdv' ? 'fr' : 'en', { tester });
       res.writeHead(302, { Location: ctaTargets[key], 'Cache-Control': 'no-store' });
-      return res.end();
+      res.end();
+      return true;
     }
 
     // 3. Stealth JS telemetry beacon
     if (pathname === '/health') {
       if (req.method !== 'POST') {
         res.writeHead(405, { Allow: 'POST', 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end('405 Method Not Allowed');
+        res.end('405 Method Not Allowed');
+        return true;
       }
-      if (!tracker.checkRateLimit(req)) {
+      if (!site.tracker.checkRateLimit(req)) {
         req.resume();
         res.writeHead(429, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '60' });
-        return res.end('429 Too Many Requests');
+        res.end('429 Too Many Requests');
+        return true;
       }
       let raw;
       try {
@@ -1936,7 +2107,8 @@ export function createRequestHandler(options = {}) {
       } catch (err) {
         const status = err && err.code === 'PAYLOAD_TOO_LARGE' ? 413 : 400;
         res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end(status === 413 ? '413 Payload Too Large' : '400 Bad Request');
+        res.end(status === 413 ? '413 Payload Too Large' : '400 Bad Request');
+        return true;
       }
       let payload;
       try {
@@ -1946,32 +2118,89 @@ export function createRequestHandler(options = {}) {
       }
       if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !HEALTH_EVENTS.has(payload.e)) {
         res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end('400 Bad Request');
+        res.end('400 Bad Request');
+        return true;
       }
-      tracker.recordHealth(req, payload);
+      site.tracker.recordHealth(req, payload, { tester });
       res.writeHead(204, { 'Cache-Control': 'no-store' });
-      return res.end();
-    }
-
-    if (!isRead) {
-      res.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('405 Method Not Allowed');
+      res.end();
+      return true;
     }
 
     // 4. Witness asset: always revalidated (no-cache + ETag) so each page render is proven
-    if (pathname === WITNESS_ASSET) {
-      const file = readProdFile(WITNESS_ASSET.slice(1));
-      if (!file) return sendNotFound(res);
+    if (pathname === WITNESS_ASSET && isRead) {
+      const file = readSiteFile(site.dir, WITNESS_ASSET.slice(1));
+      if (!file) {
+        sendNotFound(res);
+        return true;
+      }
       const etag = `"${crypto.createHash('sha1').update(file.content).digest('hex').slice(0, 16)}"`;
-      if (isGet) tracker.recordRender(req);
+      if (isGet) site.tracker.recordRender(req, { tester });
       const headers = { 'Content-Type': MIME_TYPES['.svg'], 'Cache-Control': 'no-cache', ETag: etag };
       const inm = req.headers['if-none-match'];
       if (inm && inm.split(',').map((t) => t.trim().replace(/^W\//, '')).includes(etag)) {
         res.writeHead(304, headers);
-        return res.end();
+        res.end();
+        return true;
       }
       res.writeHead(200, headers);
-      return res.end(isGet ? file.content : undefined);
+      res.end(isGet ? file.content : undefined);
+      return true;
+    }
+
+    return false;
+  }
+
+  // Production stats (sdrnow.fr/stats, /api/stats/export): same Basic Auth as staging, never
+  // logged as a visit, noindex + no-store on every response, failed logins rate-limited.
+  function handleProdStats(req, res, pathname, parsedUrl) {
+    const guard = { 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' };
+    if (isAuthLocked(req)) {
+      res.writeHead(429, { ...guard, 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '60' });
+      return res.end('429 Too Many Requests');
+    }
+    const auth = checkBasicAuth(req);
+    if (!auth || !auth.ok) {
+      if (auth) noteAuthFailure(req); // bad credentials (a bare request without credentials is not a failure)
+      res.writeHead(401, {
+        ...guard,
+        'WWW-Authenticate': 'Basic realm="SDRnow Stats"',
+        'Content-Type': 'text/plain; charset=utf-8',
+      });
+      return res.end('401 Unauthorized');
+    }
+    if (pathname === '/api/stats/export') {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { ...guard, Allow: 'GET', 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end('405 Method Not Allowed');
+      }
+      return sendStatsExport(res, tracker);
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { ...guard, Allow: 'GET, HEAD', 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('405 Method Not Allowed');
+    }
+    return sendStatsPage(req, res, parsedUrl, tracker, 'prod');
+  }
+
+  // Production traffic (Host sdrnow.fr / www.sdrnow.fr): public, never authenticated (except
+  // /stats), never sets a cookie. Only GET page loads, the witness asset, /health and /rdv/* are logged.
+  async function handleProdRequest(req, res, parsedUrl) {
+    const pathname = parsedUrl.pathname;
+    const isGet = req.method === 'GET';
+    const isRead = isGet || req.method === 'HEAD';
+
+    // 0. Production stats, behind the admin Basic Auth
+    if (PROD_STATS_PATHS.has(pathname)) {
+      return handleProdStats(req, res, pathname, parsedUrl);
+    }
+
+    // 1-4. Prospect links, CTA routes, JS beacon, witness asset
+    if (await handleTrackedRoute(req, res, pathname, { tracker, dir: prodDir })) return;
+
+    if (!isRead) {
+      res.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('405 Method Not Allowed');
     }
 
     // 5. HTML pages (/, /en, legal notices) and any other static file of PROD_DIR
@@ -2007,22 +2236,9 @@ export function createRequestHandler(options = {}) {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = parsedUrl.pathname;
 
-    // --- 0. Production dispatch & neutral tracking routes (before any staging auth) ---
+    // --- 0. Production dispatch (before any staging auth) ---
     if (isProdHost(req)) {
-      return handleProdRequest(req, res, pathname);
-    }
-    // Staging / any other host: CTA routes redirect and /health answers 204, nothing is logged
-    const stagingCta = CTA_ROUTE_RE.exec(pathname);
-    if (stagingCta && (req.method === 'GET' || req.method === 'HEAD')) {
-      const key = resolveCtaKey(stagingCta[2]);
-      if (!key) return sendNotFound(res);
-      res.writeHead(302, { Location: ctaTargets[key], 'Cache-Control': 'no-store' });
-      return res.end();
-    }
-    if (pathname === '/health' && req.method === 'POST') {
-      req.resume();
-      res.writeHead(204, { 'Cache-Control': 'no-store' });
-      return res.end();
+      return handleProdRequest(req, res, parsedUrl);
     }
 
     const currentToken = computePreviewToken(stagingDir, secret);
@@ -2030,36 +2246,12 @@ export function createRequestHandler(options = {}) {
     // --- 1. Evaluate Authentication Doors (AD-7) ---
     let isAdmin = false;
     let isReadOnly = false;
+    let authUser = null;
 
-    const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Basic ')) {
-      try {
-        const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
-        const colonIdx = credentials.indexOf(':');
-        if (colonIdx !== -1) {
-          const user = credentials.slice(0, colonIdx);
-          const pass = credentials.slice(colonIdx + 1);
-
-          const givenUserHash = crypto.createHash('sha256').update(user, 'utf8').digest();
-          const givenPassHash = crypto.createHash('sha256').update(pass, 'utf8').digest();
-
-          const isUserValid = expectedUserHashes.some(
-            (expectedHash) =>
-              givenUserHash.length === expectedHash.length &&
-              crypto.timingSafeEqual(givenUserHash, expectedHash)
-          );
-
-          if (
-            isUserValid &&
-            givenPassHash.length === expectedPassHash.length &&
-            crypto.timingSafeEqual(givenPassHash, expectedPassHash)
-          ) {
-            isAdmin = true;
-          }
-        }
-      } catch (err) {
-        isAdmin = false;
-      }
+    const basicAuth = checkBasicAuth(req);
+    if (basicAuth) {
+      isAdmin = basicAuth.ok;
+      if (isAdmin) authUser = basicAuth.user;
 
       // If Basic Auth header was sent but invalid, immediately return 401
       if (!isAdmin) {
@@ -2116,22 +2308,25 @@ export function createRequestHandler(options = {}) {
       return res.end('401 Unauthorized');
     }
 
-    // --- 1b. Radar & Stats dashboard (Admin Only) ---
+    // Who is testing: Basic Auth user name (admin, client) or "preview" (preview link reviewer)
+    const tester = isAdmin ? authUser : 'preview';
+    const injectEditor = (html) => {
+      const text = Buffer.isBuffer(html) ? html.toString('utf8') : html;
+      return isAdmin ? text.replace(/<\/body>/i, '<script src="/__editor.js"></script></body>') : text;
+    };
+
+    // --- 1a. Staging test tracking (after the gate): prospect links, CTA, beacon, witness asset ---
+    if (await handleTrackedRoute(req, res, pathname, { tracker: stagingTracker, dir: stagingDir, tester, decorateHtml: injectEditor })) {
+      return;
+    }
+
+    // --- 1b. Radar & Stats dashboard of the staging test visits (Admin Only) ---
     if (pathname === '/stats' || pathname === '/stats/') {
       if (!isAdmin) {
         res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end('403 Forbidden');
       }
-      const requested = parsedUrl.searchParams.get('period');
-      const period = STATS_PERIODS.some(([key]) => key === requested) ? requested : 'today';
-      const html = renderStatsPage(tracker.stats(period), { ctaTargets });
-      res.writeHead(200, {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Robots-Tag': 'noindex, nofollow',
-        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-      });
-      return res.end(req.method === 'HEAD' ? undefined : html);
+      return sendStatsPage(req, res, parsedUrl, stagingTracker, 'staging');
     }
 
     // --- 2. API Routes (Admin Only) ---
@@ -2141,20 +2336,9 @@ export function createRequestHandler(options = {}) {
         return res.end(JSON.stringify({ error: 'forbidden', message: 'Admin access required' }));
       }
 
-      // GET /api/stats/export -- raw append-only log as a download
+      // GET /api/stats/export -- raw append-only log of the staging test visits as a download
       if (req.method === 'GET' && pathname === '/api/stats/export') {
-        let content = '';
-        try {
-          content = fs.readFileSync(tracker.analyticsFile, 'utf8');
-        } catch {
-          content = '';
-        }
-        res.writeHead(200, {
-          'Content-Type': 'application/x-ndjson; charset=utf-8',
-          'Content-Disposition': 'attachment; filename="analytics.jsonl"',
-          'Cache-Control': 'no-store',
-        });
-        return res.end(content);
+        return sendStatsExport(res, stagingTracker);
       }
 
       // GET /api/translations
@@ -2413,11 +2597,8 @@ export function createRequestHandler(options = {}) {
 
     // HTML injection rule (AD-4, AD-7): Inject editor only for admin
     if (ext === '.html') {
-      let html = fs.readFileSync(filePath, 'utf8');
-      if (isAdmin) {
-        const scriptTag = '<script src="/__editor.js"></script></body>';
-        html = html.replace(/<\/body>/i, scriptTag);
-      }
+      const html = injectEditor(fs.readFileSync(filePath, 'utf8'));
+      if (req.method === 'GET') stagingTracker.recordPageview(req, { path: pathname, tester });
       res.writeHead(200, { 'Content-Type': contentType });
       return res.end(html);
     }
@@ -2439,10 +2620,17 @@ export function startServer() {
   const runtimeDir = (process.env.RUNTIME_DIRECTORY || '/run/sdrnow').split(':')[0];
   const tracker = createTracker({ secretFile: path.join(runtimeDir, 'daily-secret.json') });
   tracker.startTimers();
+  // Staging test visits: separate log and daily secret (same tmpfs), never any email
+  const stagingTracker = createTracker({
+    analyticsFile: STAGING_ANALYTICS_FILE,
+    secretFile: path.join(runtimeDir, 'daily-secret-staging.json'),
+    emailsDisabled: true,
+  });
+  stagingTracker.startTimers();
   if (!TEM_SECRET_KEY || !TEM_PROJECT_ID) {
     console.log('[TEM] Emails désactivés : TEM_SECRET_KEY ou SCW_DEFAULT_PROJECT_ID absent');
   }
-  const server = createServer({ tracker });
+  const server = createServer({ tracker, stagingTracker });
   // Loopback only: Caddy (same host) is the sole client, so X-Forwarded-For cannot be forged
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`[SDRnow Staging Server] Listening on http://127.0.0.1:${PORT}`);

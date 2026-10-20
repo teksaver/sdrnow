@@ -4,8 +4,9 @@ sdrnow.fr, www.sdrnow.fr {
     # Cookieless server-side tracking: pages, prospect links, witness asset, beacon and CTA
     # routes go through the Node micro-service (Host, X-Forwarded-For, User-Agent and Referer
     # are forwarded by reverse_proxy). Everything else (hashed /_astro/*, images...) stays static.
+    # /stats and /api/stats/export: production stats behind the admin Basic Auth (Node).
     @prospect path_regexp prospect ^/(pour|offre|en/for|en/offer)/[a-zA-Z0-9_-]{2,64}/?$
-    @tracked path / /en /en/ /mentions-legales /mentions-legales/ /en/legal-notice /en/legal-notice/ /assets/logo.svg /health /rdv/* /en/book/*
+    @tracked path / /en /en/ /mentions-legales /mentions-legales/ /en/legal-notice /en/legal-notice/ /assets/logo.svg /health /rdv/* /en/book/* /stats /stats/ /api/stats/export
 
     handle @prospect {
         reverse_proxy 127.0.0.1:3001
