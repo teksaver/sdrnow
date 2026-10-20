@@ -7,18 +7,17 @@
 - **Annotation des composants Astro :**
   - `data-i18n="<key>"` identifie chaque élément DOM traduisible.
   - `data-i18n-type="plain"` : réservé aux valeurs courtes et structurelles (chiffres KPIs, prix, unités, boutons CTA, liens). Aucune balise HTML ni saut de ligne n'y est autorisé.
-  - `data-i18n-type="rich"` : réservé aux titres, sous-titres, paragraphes et puces de liste. Autorise uniquement `<em>`, `<strong>` et `<br>`.
+  - `data-i18n-type="rich"` : réservé aux titres, sous-titres, paragraphes et puces de liste. Autorise uniquement `<em>` et `<br>`.
 
-## 2. Contrat HTML5 Sémantique & Styles Tailwind
+## 2. Contrat HTML5 Sémantique & Rendu Centralisé de l'Emphase
 
-- **`<em>` (Emphase d'accroche) :** Rendu en orange SDRnow sans italique via CSS parent (`[&_em]:text-primary [&_em]:not-italic`). Désactivé ou adapté sur les sections à fond déjà orange (`bg-primary`).
-- **`<strong>` (Importance forte) :** Rendu en gras (`[&_strong]:font-bold`).
+- **`<em>` (seule mise en valeur, toujours nu) :** son rendu est défini dans `src/styles/emphasis.css` par des sélecteurs partant du bloc conteneur. Le défaut est `[data-i18n-type="rich"] em` (orange, sans italique) ; les surcharges se font par clé avec `[data-i18n="<clé>"] em`. Variantes existantes : souligné blanc (`pricing.title`, fond orange) et gras couleur texte (`pricing.starter_f1`, `legal.s1_intro`). Les composants Astro ne portent aucune variante `[&_em]` ni `[&_strong]`.
 - **Sanitization du presse-papier :** Dans l'éditeur, l'événement `paste` est intercepté pour n'insérer que `event.clipboardData.getData('text/plain')`.
 
 ## 3. Ergonomie de l'Éditeur sur `staging.sdrnow.fr`
 
 - **Pleine largeur :** L'éditeur s'ouvre sous forme de tiroir flottant en bas d'écran (`position: fixed; bottom: 0`) afin de ne jamais réduire la largeur du viewport ni fausser les grilles responsive Tailwind (`md:grid-cols-3`, `lg:grid-cols-4`).
-- **Édition côte à côte & Auto-Switch :** Le tiroir présente le champ 🇫🇷 FR à gauche et le champ 🇬🇧 EN à droite, accompagnés des boutons `[Gras (<strong>)]` et `[Emphase Orange (<em>)]` (affichés uniquement si `data-i18n-type="rich"`). Donner le focus au champ FR ou EN permute instantanément tous les textes `[data-i18n]` de la page dans la langue active sans rechargement.
+- **Édition côte à côte & Auto-Switch :** Le tiroir présente le champ 🇫🇷 FR à gauche et le champ 🇬🇧 EN à droite, accompagnés des boutons `[🔶 Emphase · <rendu>]` et `[⊘ Normal]` (affichés uniquement si `data-i18n-type="rich"`). Donner le focus au champ FR ou EN permute instantanément tous les textes `[data-i18n]` de la page dans la langue active sans rechargement.
 
 ## 4. Micro-service VPS, Patch HTML `< 10 ms` & Synchronisation Git
 
@@ -28,7 +27,7 @@
   - `POST /api/reset` : recopie les traductions actives de la Production (`/var/www/html`) vers `/var/www/staging`, régénère le jeton `preview`, et commite `[skip ci]` sur la branche `staging`, sans toucher à la Production.
 - **Validation & Purge Serveur :**
   - Rejet (`400 Bad Request`) si une clé n'appartient pas à la whitelist du schéma existant ou si une valeur obligatoire est vide.
-  - Suppression stricte de toute balise HTML hors `<em>`, `<strong>`, `<br>` pour les clés `rich`, et de toute balise HTML pour les clés `plain`.
+  - Suppression stricte de toute balise HTML hors `<em>`, `<br>` pour les clés `rich`, et de toute balise HTML pour les clés `plain` ; `<strong>`, `<b>` et `<i>` sont convertis en `<em>` ; normalisation sans imbrication ni `<em>` vide ou adjacent.
 - **Patch statique immédiat :** Le micro-service remplace le contenu des nœuds `[data-i18n="<key>"]` (ainsi que `<title>` et `<meta name="description">`) directement dans les fichiers HTML compilés de `/var/www/staging` et `/var/www/html` en moins de 10 ms, sans exécuter `astro build` sur le VPS.
 
 ## 5. Contrôle d'Accès Staging : Basic Auth `admin` & Jeton Read-Only par Révision

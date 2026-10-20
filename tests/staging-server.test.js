@@ -7,6 +7,9 @@ import { Readable, Writable } from 'node:stream';
 import {
   createRequestHandler,
   sanitizeValue,
+  htmlToTokens,
+  tokensToHtml,
+  applyTokensFormat,
   validateAndSanitizePayload,
   patchHtmlContent,
   computePreviewToken,
@@ -161,11 +164,122 @@ test('sanitizeValue: strips all tags for plain type', () => {
   assert.equal(result, 'Hello World alert(1)');
 });
 
-test('sanitizeValue: preserves <em>, <strong>, <br> without attributes for rich type', () => {
+test('sanitizeValue: preserves <em>, <br> without attributes and converts <strong>, <b>, <i> to <em> for rich type', () => {
   const raw = 'Super <em class="foo" onclick="bad()">pitch</em> et <strong style="color:red">gras</strong><br><p>Paragraphe</p>';
   const result = sanitizeValue(raw, 'rich');
-  assert.equal(result, 'Super <em>pitch</em> et <strong>gras</strong><br>Paragraphe');
+  assert.equal(result, 'Super <em>pitch</em> et <em>gras</em><br>Paragraphe');
 });
+
+test('sanitizeValue: server normalization of nested, adjacent, empty and whitespace <em>', () => {
+  assert.equal(sanitizeValue('<em>a<em>b</em></em>', 'rich'), '<em>ab</em>');
+  assert.equal(sanitizeValue('<em>a</em><em>b</em>', 'rich'), '<em>ab</em>');
+  assert.equal(sanitizeValue('<em></em>', 'rich'), '');
+  assert.equal(sanitizeValue('<em> </em>', 'rich'), '');
+  assert.equal(sanitizeValue('<b>x</b>', 'rich'), '<em>x</em>');
+  assert.equal(sanitizeValue('<i>x</i>', 'rich'), '<em>x</em>');
+});
+
+test('pure token format: E1 (sélection partielle -> Normal)', () => {
+  const html = '<em>Votre SDR externalisé dès demain</em>';
+  const tokens = htmlToTokens(html);
+  const text = tokens.map((t) => t.ch).join('');
+  const start = text.indexOf('SDR externalisé');
+  const end = start + 'SDR externalisé'.length;
+  const res = tokensToHtml(applyTokensFormat(tokens, start, end, false));
+  assert.equal(res, '<em>Votre</em> SDR externalisé <em>dès demain</em>');
+});
+
+test('pure token format: E2 (extension emphase -> Emphase)', () => {
+  const html = 'mot <em>orange</em> fin';
+  const tokens = htmlToTokens(html);
+  const text = tokens.map((t) => t.ch).join('');
+  const start = text.indexOf('mot orange');
+  const end = start + 'mot orange'.length;
+  const res = tokensToHtml(applyTokensFormat(tokens, start, end, true));
+  assert.equal(res, '<em>mot orange</em> fin');
+});
+
+test('pure token format: E3 (idempotence -> Emphase)', () => {
+  const html = '<em>orange</em>';
+  const tokens = htmlToTokens(html);
+  const text = tokens.map((t) => t.ch).join('');
+  const start = text.indexOf('ran');
+  const end = start + 'ran'.length;
+  const res = tokensToHtml(applyTokensFormat(tokens, start, end, true));
+  assert.equal(res, '<em>orange</em>');
+});
+
+test('pure token format: E4 (fusion contiguë -> Emphase)', () => {
+  const html = '<em>a</em> et <em>b</em>';
+  const tokens = htmlToTokens(html);
+  const text = tokens.map((t) => t.ch).join('');
+  const start = text.indexOf('et');
+  const end = start + 'et'.length;
+  const res = tokensToHtml(applyTokensFormat(tokens, start, end, true));
+  assert.equal(res, '<em>a et b</em>');
+});
+
+test('pure token format: E5 (reset complet -> Normal)', () => {
+  const html = '<em>a</em> et <em>b</em>';
+  const tokens = htmlToTokens(html);
+  const res = tokensToHtml(applyTokensFormat(tokens, 0, tokens.length, false));
+  assert.equal(res, 'a et b');
+});
+
+test('pure token format: E6 (saut de ligne -> Normal)', () => {
+  const html = '<em>ligne 1<br>ligne 2</em>';
+  const tokens = htmlToTokens(html);
+  const text = tokens.map((t) => (t.br ? '\n' : t.ch)).join('');
+  const start = text.indexOf('1');
+  const end = text.indexOf('ligne 2') + 'ligne'.length;
+  const res = tokensToHtml(applyTokensFormat(tokens, start, end, false));
+  assert.equal(res, '<em>ligne</em> 1<br>ligne <em>2</em>');
+});
+
+test('pure token format: E7 (espaces en bordure rejetés -> Emphase)', () => {
+  const html = 'Appel de 100 leads ou';
+  const tokens = htmlToTokens(html);
+  const text = tokens.map((t) => t.ch).join('');
+  const start = text.indexOf(' 100 leads ');
+  const end = start + ' 100 leads '.length;
+  const res = tokensToHtml(applyTokensFormat(tokens, start, end, true));
+  assert.equal(res, 'Appel de <em>100 leads</em> ou');
+});
+
+test('pure token format: E8 (héritage strong converti en em)', () => {
+  const html = 'Appel de <strong>100 leads</strong>';
+  const tokens = htmlToTokens(html);
+  const res = tokensToHtml(tokens);
+  assert.equal(res, 'Appel de <em>100 leads</em>');
+});
+
+test('pure token format: E9 (caret dans emphase -> Normal)', () => {
+  const html = '<em>orange</em>';
+  const tokens = htmlToTokens(html);
+  const res = tokensToHtml(applyTokensFormat(tokens, 2, 2, false));
+  assert.equal(res, 'orange');
+});
+
+test('pure token format: E10 (sélection hors champ / hors limites -> aucun changement)', () => {
+  const html = 'mot <em>orange</em>';
+  const tokens = htmlToTokens(html);
+  const res1 = tokensToHtml(applyTokensFormat(tokens, 100, 150, true));
+  assert.equal(res1, 'mot <em>orange</em>');
+  const res2 = tokensToHtml(applyTokensFormat(tokens, -10, -5, false));
+  assert.equal(res2, 'mot <em>orange</em>');
+});
+
+test('pure token format: E11 (indépendance FR/EN)', () => {
+  const fr = '<em>Votre SDR</em> dès demain';
+  const en = 'Your SDR <em>starting tomorrow</em>';
+
+  const frTokens = htmlToTokens(fr);
+  const frRes = tokensToHtml(applyTokensFormat(frTokens, 0, 'Votre SDR'.length, false));
+
+  assert.equal(frRes, 'Votre SDR dès demain');
+  assert.equal(en, 'Your SDR <em>starting tomorrow</em>');
+});
+
 
 test('validateAndSanitizePayload: detects empty required fields and unknown keys', () => {
   const schema = {

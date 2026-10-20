@@ -80,6 +80,153 @@ export function computePreviewToken(stagingDir = STAGING_DIR, secret = STAGING_P
 
 // --- Sanitization & Validation (AD-8) ---
 
+export function htmlToTokens(html) {
+  if (typeof html !== 'string' || !html) return [];
+  const tokens = [];
+  const tagRegex = /<(\/)?([a-zA-Z0-9]+)\b([^>]*)>/gi;
+  let lastIndex = 0;
+  let emDepth = 0;
+  let match;
+
+  while ((match = tagRegex.exec(html)) !== null) {
+    const textBefore = html.slice(lastIndex, match.index);
+    if (textBefore) {
+      for (let i = 0; i < textBefore.length; i++) {
+        tokens.push({ ch: textBefore[i], em: emDepth > 0 });
+      }
+    }
+
+    const isClosing = Boolean(match[1]);
+    const tagName = match[2].toLowerCase();
+
+    if (tagName === 'br') {
+      tokens.push({ br: true });
+    } else if (['em', 'strong', 'b', 'i'].includes(tagName)) {
+      if (isClosing) {
+        emDepth = Math.max(0, emDepth - 1);
+      } else {
+        emDepth++;
+      }
+    }
+
+    lastIndex = tagRegex.lastIndex;
+  }
+
+  const textAfter = html.slice(lastIndex);
+  if (textAfter) {
+    for (let i = 0; i < textAfter.length; i++) {
+      tokens.push({ ch: textAfter[i], em: emDepth > 0 });
+    }
+  }
+
+  return tokens;
+}
+
+export function tokensToHtml(tokens) {
+  if (!tokens || tokens.length === 0) return '';
+
+  const lines = [];
+  let currentLine = [];
+  for (const token of tokens) {
+    if (token.br) {
+      lines.push(currentLine);
+      currentLine = [];
+    } else {
+      currentLine.push(token);
+    }
+  }
+  lines.push(currentLine);
+
+  return lines.map((line) => renderTokensLine(line)).join('<br>');
+}
+
+function renderTokensLine(line) {
+  if (line.length === 0) return '';
+
+  const runs = [];
+  for (const token of line) {
+    if (runs.length > 0 && runs[runs.length - 1].em === token.em) {
+      runs[runs.length - 1].chars.push(token.ch);
+    } else {
+      runs.push({ em: token.em, chars: [token.ch] });
+    }
+  }
+
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 1; i < runs.length - 1; i++) {
+      if (!runs[i].em && runs[i - 1].em && runs[i + 1].em) {
+        const text = runs[i].chars.join('');
+        if (/^\s+$/.test(text)) {
+          runs[i - 1].chars.push(...runs[i].chars, ...runs[i + 1].chars);
+          runs.splice(i, 2);
+          merged = true;
+          break;
+        }
+      }
+    }
+  }
+
+  let html = '';
+  for (const run of runs) {
+    const text = run.chars.join('');
+    if (!run.em) {
+      html += text;
+    } else {
+      const matchLeading = text.match(/^\s*/)[0];
+      const matchTrailing = text.slice(matchLeading.length).match(/\s*$/)[0];
+      const core = text.slice(matchLeading.length, text.length - matchTrailing.length);
+
+      if (core.length === 0) {
+        html += text;
+      } else {
+        html += matchLeading + '<em>' + core + '</em>' + matchTrailing;
+      }
+    }
+  }
+
+  return html;
+}
+
+export function applyTokensFormat(tokens, start, end, isEmphasis) {
+  const result = tokens.map((t) => ({ ...t }));
+  if (start === end) {
+    if (isEmphasis) return result;
+    let targetIdx = -1;
+    if (tokens[start] && tokens[start].em) {
+      targetIdx = start;
+    } else if (start > 0 && tokens[start - 1] && tokens[start - 1].em) {
+      targetIdx = start - 1;
+    }
+    if (targetIdx !== -1) {
+      let runStart = targetIdx;
+      while (runStart > 0 && result[runStart - 1].em && !result[runStart - 1].br) {
+        runStart--;
+      }
+      let runEnd = targetIdx;
+      while (runEnd < result.length - 1 && result[runEnd + 1].em && !result[runEnd + 1].br) {
+        runEnd++;
+      }
+      for (let i = runStart; i <= runEnd; i++) {
+        result[i].em = false;
+      }
+    }
+    return result;
+  }
+
+  const s = Math.max(0, Math.min(start, end));
+  const e = Math.min(result.length, Math.max(start, end));
+
+  for (let i = s; i < e; i++) {
+    if (!result[i].br) {
+      result[i].em = Boolean(isEmphasis);
+    }
+  }
+
+  return result;
+}
+
 export function sanitizeValue(rawVal, type) {
   if (typeof rawVal !== 'string') return '';
   if (type === 'plain') {
@@ -87,16 +234,10 @@ export function sanitizeValue(rawVal, type) {
     return rawVal.replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').trim();
   }
   // Rich:
-  // 1. Strip all attributes from em, strong, br
-  // 2. Strip any tags other than em, strong, br
-  let cleaned = rawVal;
-  // Strip attributes
-  cleaned = cleaned.replace(/<(em|strong)\b[^>]*>/gi, '<$1>');
-  cleaned = cleaned.replace(/<br\b[^>]*\/?>/gi, '<br>');
-  cleaned = cleaned.replace(/<\/(em|strong)\b[^>]*>/gi, '</$1>');
-  // Strip non-whitelisted tags
-  cleaned = cleaned.replace(/<(?!\\?\/?(em|strong|br)\b)[^>]*>/gi, '');
-  return cleaned.trim();
+  // 1. <strong>, <b>, <i> (with or without attributes) -> <em>
+  // 2. Strip any tags other than <em>, <br>; strip attributes
+  // 3. Normalize: unnest <em>, merge contiguous <em>, remove empty or spaces-only <em>
+  return tokensToHtml(htmlToTokens(rawVal)).trim();
 }
 
 export function validateAndSanitizePayload(body, schema) {

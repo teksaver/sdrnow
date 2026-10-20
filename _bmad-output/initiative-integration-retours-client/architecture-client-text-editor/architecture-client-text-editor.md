@@ -60,7 +60,7 @@ flowchart LR
 - **Rule:**
   1. `infra/staging-server.js` utilise exclusivement les modules natifs de Node.js 20 (`node:http`, `node:fs`, `node:path`, `node:crypto`, `fetch`).
   2. Chaque unité de sens grammaticale constitue une clé unique dans `src/i18n/translations.json` (`hero.title_pre` et `hero.title_highlight` sont fusionnés en `hero.title` ; il est interdit de scinder une phrase en éléments `[data-i18n]` frères pour appliquer un style). Les URLs structurelles (`footer.phone_href`, `footer.legal_href`) restent dans le code des composants hors de `translations.json`.
-  3. Tout élément portant `data-i18n="<key>"` est une feuille sémantique (`h1`–`h3`, `p`, `span`, `li`, `a`, `div`, `title`) rendue **inconditionnellement** dans le HTML compilé (même si sa valeur est `""`, comme `pricing.strategy_unit`), portant `data-i18n-type="plain|rich"`, et ne contenant jamais d'élément enfant `[data-i18n]` ni de balise autre que `<em>`, `<strong>` et `<br>`. Dans `Footer.astro` et `mentions-legales.astro`, les libellés accompagnés d'un lien `<a>` sont isolés dans leur propre `<span data-i18n="..." data-i18n-type="plain">`. Dans `Layout.astro`, `<title>` porte `data-i18n="meta.title"` (ou `meta.legal_title`) et `<meta name="description">` porte `data-i18n-content="meta.description"`.
+  3. Tout élément portant `data-i18n="<key>"` est une feuille sémantique (`h1`–`h3`, `p`, `span`, `li`, `a`, `div`, `title`) rendue **inconditionnellement** dans le HTML compilé (même si sa valeur est `""`, comme `pricing.strategy_unit`), portant `data-i18n-type="plain|rich"`, et ne contenant jamais d'élément enfant `[data-i18n]` ni de balise autre que `<em>` et `<br>`. Dans `Footer.astro` et `mentions-legales.astro`, les libellés accompagnés d'un lien `<a>` sont isolés dans leur propre `<span data-i18n="..." data-i18n-type="plain">`. Dans `Layout.astro`, `<title>` porte `data-i18n="meta.title"` (ou `meta.legal_title`) et `<meta name="description">` porte `data-i18n-content="meta.description"`.
   4. Côté client (`infra/editor-client.js`), l'éditeur s'affiche dans un tiroir flottant en bas d'écran (`position: fixed; bottom: 0; left: 0; right: 0`) préservant 100 % de la largeur du viewport ; le focus dans le champ FR ou EN permute instantanément tous les nœuds `[data-i18n]` de la page dans la langue active sans rechargement.
 
 ### AD-6 — Mutation Locale Atomique (`< 10 ms`) & File d'Attente Git `202 Accepted` [ADOPTED]
@@ -94,8 +94,8 @@ flowchart LR
 - **Rule:** Le schéma des clés, leur caractère obligatoire/optionnel (`pricing.strategy_unit` seul optionnel) et leur type (`plain` vs `rich`) sont définis dans l'objet `schema` de `src/i18n/translations.json`. Tant à l'insertion presse-papier côté client (`paste` forcé en `text/plain`) qu'à la validation serveur sur `POST /api/staging` et `POST /api/publish` :
   - Toute clé inconnue, manquante ou dont la valeur nettoyée (texte hors balises) est vide sur une clé obligatoire entraîne un rejet `400 Bad Request`.
   - Sur les clés `plain`, toute balise HTML et tout saut de ligne sont supprimés (les boutons de formatage et la touche `Entrée` sont désactivés dans l'éditeur).
-  - Sur les clés `rich`, seules les balises `<em>`, `<strong>` et `<br>` (sans aucun attribut) sont conservées ; toute autre balise est purgée en ne gardant que son texte.
-  - En CSS, `<em>` est stylé en `[&_em]:text-primary [&_em]:not-italic` sur fond clair, et bascule en `[&_em]:underline [&_em]:decoration-white [&_em]:not-italic` dans les conteneurs à fond `bg-primary` (`Pricing.astro` H2).
+  - Sur les clés `rich`, seules les balises `<em>` et `<br>` (sans aucun attribut) sont autorisées ; `<strong>`, `<b>` et `<i>` sont convertis en `<em>` et normalisés (fusion, pas d'imbrication, pas d'`<em>` vide ou d'espaces) ; toute autre balise est purgée en ne gardant que son texte.
+  - En CSS, le rendu de `<em>` est centralisé dans `src/styles/emphasis.css` via des sélecteurs sur le bloc conteneur `[data-i18n] em` (orange par défaut, souligné sur fond orange, gras sur puce de tarif ou mentions légales).
 
 ## Consistency Conventions
 
@@ -167,7 +167,7 @@ sequenceDiagram
 
     Admin->>UI: Édite FR/EN (tiroir bas) + clique "Enregistrer sur Staging" ou "Publier en Prod"
     UI->>Srv: POST /api/staging (ou /api/publish) { fr, en }
-    Srv->>Srv: Valide Basic Auth admin + Whitelist schema + Sanitize (<em>, <strong>, <br>)
+    Srv->>Srv: Valide Basic Auth admin + Whitelist schema + Sanitize (<em>, <br> ; <strong>/<b>/<i> -> <em>)
     Srv->>Disk: Incrémente .revision + Écriture atomique (.tmp + renameSync) translations.json & 4 HTML (<10ms)
     Srv->>Srv: Recalcule previewToken = HMAC(secret, revision + ":" + sha256(staging/translations.json))
     Srv-->>UI: HTTP 202 Accepted { status: "accepted", previewUrl, gitSync: "queued" }
@@ -210,7 +210,7 @@ sequenceDiagram
 | Capability / Area | Lives in | Governed by |
 | --- | --- | --- |
 | CAP-1 (Édition bilingue In-Page & Preview CSS pleine largeur) | `infra/editor-client.js`, `src/components/*.astro`, `src/i18n/translations.json` | AD-4, AD-5 |
-| CAP-2 (Formatage sémantique bridé `<em>`/`<strong>`/`<br>` & `plain` vs `rich`) | `infra/editor-client.js`, `infra/staging-server.js`, `src/i18n/translations.json` | AD-5, AD-8 |
+| CAP-2 (Formatage sémantique bridé `<em>`/`<br>` & `plain` vs `rich`) | `infra/editor-client.js`, `infra/staging-server.js`, `src/i18n/translations.json`, `src/styles/emphasis.css` | AD-5, AD-8 |
 | CAP-3 (Enregistrement Staging `< 10 ms` & Lien Read-Only par révision) | `infra/staging-server.js`, `infra/Caddyfile.template` | AD-4, AD-6, AD-7 |
 | CAP-4 (Publication directe en Production & Synchro Git `[skip ci]`) | `infra/staging-server.js`, `.github/workflows/deploy.yml` | AD-3, AD-4, AD-6, AD-8 |
 | CAP-5 (Réinitialisation du Staging depuis la Production) | `infra/staging-server.js`, `infra/editor-client.js` | AD-6, AD-7 |

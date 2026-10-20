@@ -24,8 +24,8 @@ sources:
   - **success:** Cliquer sur un bloc éditable ouvre un tiroir bilingue FR/EN en bas d'écran sans réduire la largeur du viewport ; placer le curseur et saisir dans le champ FR ou EN bascule instantanément toute la page dans la langue correspondante et met à jour le DOM en direct.
 
 - **CAP-2**
-  - **intent:** L'administrateur peut appliquer uniquement une emphase d'accroche, une importance forte ou un saut de ligne à l'intérieur des blocs de texte riche, tandis que les blocs de données courtes (KPIs, prix, CTA) restent verrouillés en texte brut.
-  - **success:** Dans un bloc riche, seuls les marqueurs d'emphase orange (`<em>`), de gras (`<strong>`) et de saut de ligne (`<br>`) peuvent être insérés (et tout collage presse-papier est converti en texte brut) ; un bouton dédié permet de dépouiller instantanément tout marqueur sur la sélection pour la rétablir en texte brut normal ; dans un bloc brut, les boutons de formatage et les sauts de ligne sont inactifs.
+  - **intent:** L'administrateur peut, dans un texte normal par défaut, mettre en emphase n'importe quelle portion d'un bloc de texte riche ou la remettre en normal, et insérer des sauts de ligne, tandis que les blocs de données courtes (KPIs, prix, CTA) restent verrouillés en texte brut.
+  - **success:** Dans un bloc riche, seuls `<em>` (sans attribut) et `<br>` peuvent être produits (tout collage est converti en texte brut). Deux actions, « Emphase » et « Normal », s'appliquent à n'importe quelle sélection, y compris une sélection partielle ou à cheval sur une emphase existante. Le résultat ne contient jamais d'`<em>` imbriqué, adjacent ou vide : les emphases restantes sont redécoupées et fusionnées. Le rendu de l'emphase est défini par le bloc conteneur (sélecteur CSS), visible dans l'éditeur comme sur la page. Dans un bloc brut, les boutons de formatage et les sauts de ligne sont inactifs.
 
 - **CAP-3**
   - **intent:** L'administrateur peut enregistrer ses modifications sur l'environnement de staging et copier un lien de partage en lecture seule à usage lié à cette version précise du staging, permettant à un relecteur externe de consulter les versions FR et EN en un clic sans ouvrir le staging au public.
@@ -42,7 +42,7 @@ sources:
 ## Constraints
 
 - **1 unité de sens = 1 bloc de traduction FR/EN unique :** Chaque titre, paragraphe, puce, chiffre KPI ou CTA est édité d'un seul tenant afin de préserver la liberté d'ordre grammatical entre le français et l'anglais.
-- **Zéro classe CSS ni `<span>` dans les données de traduction :** Seuls le texte brut et, pour les blocs riches, les balises HTML5 sémantiques `<em>`, `<strong>` et `<br>` sont admis côté client et validés par whitelist côté serveur.
+- **Zéro classe CSS ni `<span>` dans les données de traduction :** Seuls le texte brut et, pour les blocs riches, les balises HTML5 sémantiques `<em>` et `<br>` sans attribut (le rendu visuel de `<em>` est porté par un sélecteur CSS sur le bloc conteneur, `[data-i18n="<clé>"] em`) sont admis côté client et validés par whitelist côté serveur.
 - **Staging fermé au public, Basic Auth `admin` et jeton Read-Only éphémère par révision :** `staging.sdrnow.fr` renvoie `401/403` par défaut ; l'accès `admin` s'effectue par Basic Auth HTTP (débloquant l'éditeur et les API d'écriture), tandis que l'accès relecteur s'effectue sans Basic Auth via `?preview=<token>`, lequel expire dès que le staging est à nouveau modifié ou réinitialisé.
 - **Zéro secret côté navigateur & zéro race condition CI/CD :** Aucun token GitHub n'est exposé au client ; le micro-service serveur applique les modifications localement et marque ses commits GitHub avec `[skip ci]` pour ne pas déclencher `.github/workflows/deploy.yml`.
 
