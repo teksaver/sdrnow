@@ -80,23 +80,218 @@ export function computePreviewToken(stagingDir = STAGING_DIR, secret = STAGING_P
 
 // --- Sanitization & Validation (AD-8) ---
 
+// Emphasis formatting model (P2/P3). Tokens hold DECODED characters (what the browser
+// exposes as text node values): htmlToTokens decodes entities, tokensToHtml escapes them.
+// These functions only reference each other and JS built-ins: they are also served verbatim
+// to the browser through EMPHASIS_MODEL_PRELUDE (see buildEmphasisModelPrelude).
+// Whitespace is JS `\s` everywhere, which includes U+00A0 (&nbsp;): it is pushed out of <em>.
+
+export function decodeHtmlEntities(text) {
+  const named = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0',
+    laquo: '\u00ab', raquo: '\u00bb', hellip: '\u2026', ndash: '\u2013', mdash: '\u2014',
+    lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201c', rdquo: '\u201d', euro: '\u20ac',
+    copy: '\u00a9', reg: '\u00ae', eacute: '\u00e9', egrave: '\u00e8', ecirc: '\u00ea',
+    agrave: '\u00e0', acirc: '\u00e2', ccedil: '\u00e7', ocirc: '\u00f4', ucirc: '\u00fb',
+    ugrave: '\u00f9', icirc: '\u00ee', iuml: '\u00ef', euml: '\u00eb', Eacute: '\u00c9',
+  };
+  return text.replace(/&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|([a-zA-Z]+));/g, (entity, dec, hex, name) => {
+    if (name !== undefined) {
+      return Object.prototype.hasOwnProperty.call(named, name) ? named[name] : entity;
+    }
+    const code = dec !== undefined ? parseInt(dec, 10) : parseInt(hex, 16);
+    // Same replacement as the browser for NUL, surrogates and out-of-range code points
+    if (!code || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return '\ufffd';
+    return String.fromCodePoint(code);
+  });
+}
+
+export function escapeHtmlText(text) {
+  // Mirrors the browser's innerHTML serialization of text nodes
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\u00a0/g, '&nbsp;');
+}
+
+export function htmlToTokens(html) {
+  if (typeof html !== 'string' || !html) return [];
+  const tokens = [];
+  // Comments (dropped, an unterminated one runs to the end) or a well-formed tag:
+  // `<name ...>` / `</name ...>`, quoted attribute values may contain `>`.
+  // Any other `<` (e.g. `a < b`, `<img src=x` without `>`) stays plain text.
+  const tagRegex = /<!--[\s\S]*?(?:-->|$)|<(\/)?([a-zA-Z][a-zA-Z0-9-]*)(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>/g;
+  let lastIndex = 0;
+  let emDepth = 0;
+  let match;
+
+  function pushText(raw) {
+    const text = decodeHtmlEntities(raw);
+    for (let i = 0; i < text.length; i++) {
+      tokens.push({ ch: text[i], em: emDepth > 0 });
+    }
+  }
+
+  while ((match = tagRegex.exec(html)) !== null) {
+    pushText(html.slice(lastIndex, match.index));
+    lastIndex = tagRegex.lastIndex;
+    if (match[2] === undefined) continue; // comment
+
+    const isClosing = Boolean(match[1]);
+    const tagName = match[2].toLowerCase();
+
+    if (tagName === 'br') {
+      tokens.push({ br: true });
+    } else if (['em', 'strong', 'b', 'i'].includes(tagName)) {
+      if (isClosing) {
+        emDepth = Math.max(0, emDepth - 1);
+      } else {
+        emDepth++;
+      }
+    }
+  }
+
+  pushText(html.slice(lastIndex));
+
+  return tokens;
+}
+
+export function tokensToHtml(tokens) {
+  if (!tokens || tokens.length === 0) return '';
+
+  const lines = [];
+  let currentLine = [];
+  for (const token of tokens) {
+    if (token.br) {
+      lines.push(currentLine);
+      currentLine = [];
+    } else {
+      currentLine.push(token);
+    }
+  }
+  lines.push(currentLine);
+
+  return lines.map((line) => renderTokensLine(line)).join('<br>');
+}
+
+function renderTokensLine(line) {
+  if (line.length === 0) return '';
+
+  const runs = [];
+  for (const token of line) {
+    if (runs.length > 0 && runs[runs.length - 1].em === token.em) {
+      runs[runs.length - 1].chars.push(token.ch);
+    } else {
+      runs.push({ em: token.em, chars: [token.ch] });
+    }
+  }
+
+  let html = '';
+  for (const run of runs) {
+    const text = run.chars.join('');
+    if (!run.em) {
+      html += escapeHtmlText(text);
+    } else {
+      const matchLeading = text.match(/^\s*/)[0];
+      const matchTrailing = text.slice(matchLeading.length).match(/\s*$/)[0];
+      const core = text.slice(matchLeading.length, text.length - matchTrailing.length);
+
+      if (core.length === 0) {
+        html += escapeHtmlText(text);
+      } else {
+        html += escapeHtmlText(matchLeading) + '<em>' + escapeHtmlText(core) + '</em>' + escapeHtmlText(matchTrailing);
+      }
+    }
+  }
+
+  return html;
+}
+
+export function applyTokensFormat(tokens, start, end, isEmphasis) {
+  const result = tokens.map((t) => ({ ...t }));
+  if (start === end) {
+    if (isEmphasis) return result;
+    let targetIdx = -1;
+    if (tokens[start] && tokens[start].em) {
+      targetIdx = start;
+    } else if (start > 0 && tokens[start - 1] && tokens[start - 1].em) {
+      targetIdx = start - 1;
+    }
+    if (targetIdx !== -1) {
+      let runStart = targetIdx;
+      while (runStart > 0 && result[runStart - 1].em && !result[runStart - 1].br) {
+        runStart--;
+      }
+      let runEnd = targetIdx;
+      while (runEnd < result.length - 1 && result[runEnd + 1].em && !result[runEnd + 1].br) {
+        runEnd++;
+      }
+      for (let i = runStart; i <= runEnd; i++) {
+        result[i].em = false;
+      }
+    }
+    return result;
+  }
+
+  const s = Math.max(0, Math.min(start, end));
+  const e = Math.min(result.length, Math.max(start, end));
+
+  for (let i = s; i < e; i++) {
+    if (!result[i].br) {
+      result[i].em = Boolean(isEmphasis);
+    }
+  }
+
+  return result;
+}
+
+// Single source of truth for the browser: the pure model above is serialized with
+// fn.toString() and prepended to /__editor.js, which reads window.__sdrnowEmphasisModel.
+export function buildEmphasisModelPrelude() {
+  const fns = [decodeHtmlEntities, escapeHtmlText, htmlToTokens, renderTokensLine, tokensToHtml, applyTokensFormat];
+  return [
+    '// --- SDRnow emphasis model (generated from infra/staging-server.js, do not edit) ---',
+    '(function () {',
+    "  'use strict';",
+    ...fns.map((fn) => fn.toString()),
+    `  window.__sdrnowEmphasisModel = Object.freeze({ ${fns.map((fn) => fn.name).join(', ')} });`,
+    '})();',
+    '',
+  ].join('\n');
+}
+
+const EMPHASIS_MODEL_PRELUDE = buildEmphasisModelPrelude();
+
 export function sanitizeValue(rawVal, type) {
   if (typeof rawVal !== 'string') return '';
   if (type === 'plain') {
-    // Strip all HTML and replace newlines with a single space
-    return rawVal.replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').trim();
+    // Plain values are text, not HTML (the editor sends textContent, Astro renders {t()} escaped,
+    // patchHtmlContent escapes them): entities are NOT decoded, so « R&D » stays R&D.
+    // Tag-like sequences are still dropped and line breaks become a single space.
+    return rawVal
+      .replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '')
+      .replace(/[\r\n]+/g, ' ')
+      .trim();
   }
   // Rich:
-  // 1. Strip all attributes from em, strong, br
-  // 2. Strip any tags other than em, strong, br
-  let cleaned = rawVal;
-  // Strip attributes
-  cleaned = cleaned.replace(/<(em|strong)\b[^>]*>/gi, '<$1>');
-  cleaned = cleaned.replace(/<br\b[^>]*\/?>/gi, '<br>');
-  cleaned = cleaned.replace(/<\/(em|strong)\b[^>]*>/gi, '</$1>');
-  // Strip non-whitelisted tags
-  cleaned = cleaned.replace(/<(?!\\?\/?(em|strong|br)\b)[^>]*>/gi, '');
-  return cleaned.trim();
+  // 1. <strong>, <b>, <i> (with or without attributes) -> <em>
+  // 2. Strip any tags other than <em>, <br>; strip attributes
+  // 3. Normalize: unnest <em>, merge contiguous <em>, remove empty or spaces-only <em>
+  // 4. Trim leading/trailing whitespace on decoded characters (so &nbsp; is trimmed too)
+  const tokens = htmlToTokens(rawVal);
+  let s = 0;
+  let e = tokens.length;
+  while (s < e && !tokens[s].br && /\s/.test(tokens[s].ch)) s++;
+  while (e > s && !tokens[e - 1].br && /\s/.test(tokens[e - 1].ch)) e--;
+  return tokensToHtml(tokens.slice(s, e));
+}
+
+// A value is blank when it has no visible character: tags, <br>, spaces and &nbsp; do not count
+export function isBlankValue(value, type) {
+  if (typeof value !== 'string') return true;
+  if (type === 'plain') return value.trim().length === 0;
+  return htmlToTokens(value).every((t) => t.br || /\s/.test(t.ch));
 }
 
 export function validateAndSanitizePayload(body, schema) {
@@ -119,9 +314,8 @@ export function validateAndSanitizePayload(body, schema) {
       }
 
       const cleanVal = sanitizeValue(val, fieldDef.type);
-      const textOnly = cleanVal.replace(/<[^>]*>/g, '').trim();
 
-      if (!fieldDef.optional && textOnly.length === 0) {
+      if (!fieldDef.optional && isBlankValue(cleanVal, fieldDef.type)) {
         return { error: 'empty_required_field', message: `Field "${key}" (${lang}) cannot be empty` };
       }
 
@@ -136,6 +330,9 @@ export function validateAndSanitizePayload(body, schema) {
 
 export function patchHtmlContent(html, dict) {
   let patched = html;
+  // Plain values are decoded text and must be escaped; rich values are already sanitized HTML.
+  // Title and meta are always plain; an element is rich only if it says data-i18n-type="rich".
+  const isRichAttrs = (attrs) => /\bdata-i18n-type=["']rich["']/i.test(attrs);
 
   for (const [key, val] of Object.entries(dict)) {
     const escapedKey = escapeRegex(key);
@@ -144,7 +341,7 @@ export function patchHtmlContent(html, dict) {
     if (key === 'meta.description') {
       const metaRegex = new RegExp(`<meta([^>]*\\bdata-i18n-content=["']${escapedKey}["'][^>]*)>`, 'gi');
       patched = patched.replace(metaRegex, (match, attrs) => {
-        const escapedVal = val.replace(/"/g, '&quot;');
+        const escapedVal = escapeHtmlText(val).replace(/"/g, '&quot;');
         let newAttrs;
         if (/\bcontent=(["'])[\s\S]*?\1/i.test(attrs)) {
           newAttrs = attrs.replace(/\bcontent=(["'])[\s\S]*?\1/i, () => `content="${escapedVal}"`);
@@ -158,12 +355,12 @@ export function patchHtmlContent(html, dict) {
     // 2. Title: <title ... data-i18n="key" ...>...</title>
     if (key.startsWith('meta.')) {
       const titleRegex = new RegExp(`<title([^>]*\\bdata-i18n=["']${escapedKey}["'][^>]*)>[\\s\\S]*?<\\/title>`, 'gi');
-      patched = patched.replace(titleRegex, (match, attrs) => `<title${attrs}>${val}</title>`);
+      patched = patched.replace(titleRegex, (match, attrs) => `<title${attrs}>${escapeHtmlText(val)}</title>`);
     }
 
     // 3. Regular elements: <tag ... data-i18n="key" ...>...</tag>
     const elRegex = new RegExp(`<([a-zA-Z0-9]+)([^>]*\\bdata-i18n=["']${escapedKey}["'][^>]*)>[\\s\\S]*?<\\/\\1>`, 'gi');
-    patched = patched.replace(elRegex, (match, tag, attrs) => `<${tag}${attrs}>${val}</${tag}>`);
+    patched = patched.replace(elRegex, (match, tag, attrs) => `<${tag}${attrs}>${isRichAttrs(attrs) ? val : escapeHtmlText(val)}</${tag}>`);
   }
 
   return patched;
@@ -681,7 +878,7 @@ export function createRequestHandler(options = {}) {
 
       if (fs.existsSync(editorScriptPath)) {
         res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
-        return res.end(fs.readFileSync(editorScriptPath, 'utf8'));
+        return res.end(EMPHASIS_MODEL_PRELUDE + fs.readFileSync(editorScriptPath, 'utf8'));
       }
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('Editor script not found');

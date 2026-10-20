@@ -129,9 +129,8 @@ Pour éviter toute confusion visuelle entre le site (fond clair `{colors.page-ba
 - **Editor Input (`{typography.editor-input}`)** : Inter 15px (`lineHeight: 1.55`) dans les deux zones de saisie du tiroir bas pour un confort de lecture immédiat, indépendamment de la taille réelle du titre (`<h1>` 60px ou `<p>` 14px) sur la page.
 - **Mono Key (`{typography.mono-key}`)** : Monospace 11px pour afficher discrètement l'identifiant du bloc sélectionné (ex. `hero.title`, `pricing.starter_f1`).
 
-Dans les zones de saisie du tiroir (`{colors.chrome-input}`), les deux seules balises HTML5 sémantiques autorisées sont stylées visuellement en direct :
-- `<strong>` s'affiche en gras (`font-weight: 700; color: #FFFFFF`).
-- `<em>` s'affiche en orange SDRnow sans italique (`font-style: normal; color: #F26522; background: rgba(242, 101, 34, 0.15); padding: 0 2px; border-radius: 2px`).
+Dans les zones de saisie du tiroir (`{colors.chrome-input}`), la seule balise de mise en valeur HTML5 sémantique autorisée (`<em>`, toujours nue) reprend dynamiquement le rendu du bloc cible (orange par défaut, souligné sur fond orange, gras sur puce de tarif ou mentions légales) :
+- `<em>` s'affiche par défaut en orange SDRnow sans italique (`font-style: normal; color: #F26522; background: rgba(242, 101, 34, 0.15); padding: 0 2px; border-radius: 2px`) et s'adapte fidèlement au rendu du bloc sondé sur la page.
 
 ## Layout & Spacing
 
@@ -162,8 +161,8 @@ Dans les zones de saisie du tiroir (`{colors.chrome-input}`), les deux seules ba
 - **`Editable Block Outline` (`{components.editable-block-outline}`)** : Actif uniquement en mode `✏️ Édition`. Au survol d'un élément `[data-i18n]`, affiche un contour pointillé `2px dashed {colors.primary}` (`outline-offset: 4px`). Lorsqu'un bloc est sélectionné, le contour devient plein (`2px solid {colors.primary}`) avec un léger fond `{colors.primary-soft}` et une étiquette supérieure (`{typography.mono-key}`, fond `{colors.primary}`, texte blanc) indiquant la clé et le type (`hero.title • Riche` ou `proof.stat1_value • Brut`).
 - **`Bilingual Bottom Drawer` (`{components.bilingual-bottom-drawer}`)** : Tiroir fixé en bas d'écran (`height: {spacing.drawer-height}`, fond `{colors.chrome-bg}`, bordure supérieure `2px solid {colors.primary}`). Barre d'en-tête compacte (`36px`) affichant la clé `{typography.mono-key}`, la `semantic-format-toolbar`, et le bouton fermer `✕` (`Esc`). Corps divisé en 2 cartes côte à côte (`🇫🇷 Version Française` et `🇬🇧 English Version`) sur fond `{colors.chrome-input}` avec bordure `{colors.chrome-border}` qui passe en `{colors.primary}` sur la langue ayant le focus.
 - **`Semantic Format Toolbar` (`{components.semantic-format-toolbar}`)** : Groupe de 2 boutons dans l'en-tête du tiroir :
-  - **`[ B Gras ]`** (`<strong>`) : Fond `{colors.chrome-surface}`, passe en `{colors.primary}` quand la sélection courante est dans un `<strong>`.
-  - **`[ 🔶 Emphase Orange ]`** (`<em>`) : Fond `{colors.chrome-surface}`, passe en `{colors.primary}` quand la sélection courante est dans un `<em>`.
+  - **`[ 🔶 Emphase · <rendu>]`** (`<em>`) : Fond `{colors.chrome-surface}`, passe en `{colors.primary}` (ou fond doux) quand la sélection courante est en emphase. Son libellé et son rendu sont dérivés dynamiquement du bloc sondé.
+  - **`[ ⊘ Normal ]`** : Fond `{colors.chrome-surface}`, remet la sélection en texte normal sans emphase (idempotent).
   - Lorsque le bloc sélectionné est `data-i18n-type="plain"`, les deux boutons sont masqués/remplacés par un badge verrouillé `🔒 Texte brut (sans style ni retour à la ligne)` en `{colors.chrome-muted}`.
 - **`Sync Status Toast` (`{components.sync-status-toast}`)** : Notification flottante en haut à droite (`top: 64px; right: 16px`), fond `{colors.chrome-surface}`, bordure gauche `4px solid` (`{colors.status-staging}`, `{colors.status-prod}` ou `{colors.status-danger}`). Affiche la progression `202 Accepted` (« Appliqué sur le serveur (<10ms) • Synchro Git en cours... ») et les erreurs de validation.
 - **`Expired Preview Gate` (`{components.expired-preview-gate}`)** : Écran pleine page servi lors d'une `403 Forbidden` sur un lien `?preview=<token>` invalidé. Fond `{colors.page-surface}`, carte centrée (`max-width: 440px`, fond `{colors.page-background}`, bordure `{colors.page-border}`, rayon `{rounded.lg}`, padding `{spacing.xl}`), logo SDRnow, icône cadenas/horloge en `{colors.primary}`, titre explicite et message invitant le relecteur à demander le nouveau lien à Jean-Charles.
@@ -174,6 +173,6 @@ Dans les zones de saisie du tiroir (`{colors.chrome-input}`), les deux seules ba
 |---|---|
 | Garder la landing page à 100 % de la largeur du viewport (tiroir uniquement en bas) | Ouvrir une sidebar latérale qui écrase la page et fausse les breakpoints Tailwind |
 | Utiliser les couleurs sombres `{colors.chrome-bg}` pour tous les outils d'édition | Utiliser un fond blanc pour l'éditeur qui se confondrait avec les cartes de `Pricing.astro` |
-| Afficher uniquement `[B Gras]` (`<strong>`) et `[🔶 Emphase Orange]` (`<em>`) sur les blocs `rich` | Proposer un sélecteur de police, de taille, d'alignement ou de couleur libre |
-| Désactiver et masquer les outils de formatage sur les blocs `plain` (KPIs, prix, CTA) | Laisser l'utilisateur insérer un `<br>` ou un `<strong>` dans un bouton CTA ou un chiffre KPI |
+| Afficher uniquement `[🔶 Emphase · <rendu>]` (`<em>`) et `[⊘ Normal]` sur les blocs `rich` | Proposer un sélecteur de police, de taille, d'alignement ou de couleur libre |
+| Désactiver et masquer les outils de formatage sur les blocs `plain` (KPIs, prix, CTA) | Laisser l'utilisateur insérer un `<br>` ou une mise en valeur dans un bouton CTA ou un chiffre KPI |
 | Injecter l'interface d'édition uniquement pour la session Basic Auth `admin` | Afficher le moindre élément d'édition ou la moindre popup Basic Auth à un relecteur `?preview=` |

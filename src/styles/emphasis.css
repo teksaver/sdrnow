@@ -1,0 +1,21 @@
+/* Défaut : toute emphase d'un bloc riche = orange SDRnow, sans italique */
+[data-i18n-type="rich"] em {
+  font-style: normal;
+  color: #F26522;
+}
+
+/* Titre Pricing sur fond orange : souligné blanc */
+[data-i18n="pricing.title"] em {
+  color: inherit;
+  font-style: normal;
+  text-decoration: underline;
+  text-decoration-color: #fff;
+}
+
+/* Puce tarif & mentions légales : gras, couleur du texte */
+[data-i18n="pricing.starter_f1"] em,
+[data-i18n="legal.s1_intro"] em {
+  color: inherit;
+  font-style: normal;
+  font-weight: 700;
+}

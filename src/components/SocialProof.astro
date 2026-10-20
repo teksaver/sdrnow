@@ -11,8 +11,8 @@ const t = useTranslations(lang);
 
 <section class="py-16 px-4 sm:px-6 lg:px-8 bg-white border-b border-border">
   <div class="max-w-7xl mx-auto text-center">
-    <h2 class="text-3xl font-bold mb-4 [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="proof.title" data-i18n-type="rich" set:html={t('proof.title')}></h2>
-    <p class="text-lg text-text_muted mb-10 max-w-2xl mx-auto [&_em]:text-primary [&_em]:not-italic [&_strong]:font-bold" data-i18n="proof.subtitle" data-i18n-type="rich" set:html={t('proof.subtitle')}></p>
+    <h2 class="text-3xl font-bold mb-4" data-i18n="proof.title" data-i18n-type="rich" set:html={t('proof.title')}></h2>
+    <p class="text-lg text-text_muted mb-10 max-w-2xl mx-auto" data-i18n="proof.subtitle" data-i18n-type="rich" set:html={t('proof.subtitle')}></p>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="py-4 px-2 bg-surface rounded border border-border shadow-sm flex flex-col justify-center items-center min-h-[140px]">
         <div class="text-3xl lg:text-4xl font-extrabold text-primary mb-2" data-i18n="proof.stat1_value" data-i18n-type="plain">{t('proof.stat1_value')}</div>

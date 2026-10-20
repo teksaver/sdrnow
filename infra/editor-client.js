@@ -123,6 +123,27 @@
   }
 
   // --- Live DOM Language Switcher (CAP-1) ---
+  // Plain values are decoded text (never HTML), rich values are sanitized HTML
+  function isPlainKey(key) {
+    return !state.schema[key] || state.schema[key].type !== 'rich';
+  }
+
+  function setNodeValue(node, key, value) {
+    if (isPlainKey(key)) {
+      node.textContent = value;
+    } else {
+      node.innerHTML = value;
+    }
+  }
+
+  // Blank = no visible character (tags, <br>, spaces and &nbsp; do not count)
+  function isBlankValue(key, value) {
+    if (!value) return true;
+    if (isPlainKey(key)) return value.trim().length === 0;
+    if (!emphasisModel) return value.replace(/<[^>]*>/g, '').trim().length === 0;
+    return emphasisModel.htmlToTokens(value).every((t) => t.br || /\s/.test(t.ch));
+  }
+
   function applyLanguageToPage(lang) {
     state.currentLang = lang;
     const dict = state.translations[lang] || {};
@@ -146,146 +167,226 @@
       if (node.tagName === 'TITLE') return;
       const key = node.getAttribute('data-i18n');
       if (dict[key] !== undefined) {
-        node.innerHTML = dict[key];
+        setNodeValue(node, key, dict[key]);
       }
     });
   }
 
-  // --- Update ARIA & Visual State on Format Buttons ---
-  function updateFormatButtonAria() {
-    const btnBold = document.getElementById('sdrnow-btn-bold');
-    const btnEm = document.getElementById('sdrnow-btn-em');
-    if (!btnBold || !btnEm) return;
-
-    let isBold = false;
-    let isEm = false;
-    const selection = window.getSelection();
-
-    if (selection && selection.rangeCount) {
-      let node = selection.anchorNode;
-      while (node && !node.classList?.contains('sdrnow-input-area')) {
-        const name = node.nodeName?.toLowerCase();
-        if (name === 'strong') isBold = true;
-        if (name === 'em') isEm = true;
-        node = node.parentNode;
-      }
-    }
-
-    btnBold.setAttribute('aria-pressed', isBold ? 'true' : 'false');
-    btnEm.setAttribute('aria-pressed', isEm ? 'true' : 'false');
-    btnBold.style.background = isBold ? TOKENS.primary : TOKENS.chromeBg;
-    btnBold.style.color = isBold ? '#FFFFFF' : TOKENS.chromeText;
-    btnEm.style.background = isEm ? TOKENS.primarySoft : TOKENS.chromeBg;
-    btnEm.style.color = isEm ? TOKENS.primaryHover : TOKENS.primary;
+  // --- Pure Token Formatting Model (P2) ---
+  // The pure functions (htmlToTokens, tokensToHtml, applyTokensFormat, ...) are defined once in
+  // infra/staging-server.js and prepended to this script when /__editor.js is served.
+  // Only the DOM-specific parts (domToTokens, findDomPosition) live here.
+  const emphasisModel = window.__sdrnowEmphasisModel;
+  if (!emphasisModel) {
+    console.error('[SDRnow Editor] Emphasis model missing: /__editor.js must be served by staging-server.js');
   }
 
-  // --- Format Commands Helper (Precise Selection Range Unwrapping) ---
-  function toggleFormat(tag) {
-    const activeInput = (document.activeElement && document.activeElement.classList.contains('sdrnow-input-area'))
-      ? document.activeElement
-      : (state.lastActiveInput || document.getElementById(`sdrnow-input-${state.currentLang}`));
+  // Tokens hold decoded characters (text node values), as in the canonical model
+  function domToTokens(root, range) {
+    const tokens = [];
+    let tokenStart = -1;
+    let tokenEnd = -1;
 
-    if (!activeInput) return;
-    activeInput.focus();
-
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    const range = selection.getRangeAt(0);
-
-    // Check if selection is inside an existing tag of this type
-    let parent = selection.anchorNode;
-    let tagNode = null;
-    while (parent && parent !== activeInput) {
-      if (parent.nodeName && parent.nodeName.toLowerCase() === tag) {
-        tagNode = parent;
-        break;
-      }
-      parent = parent.parentNode;
-    }
-
-    if (tagNode) {
-      // Split tagNode so only the selected text is unwrapped
-      const beforeRange = document.createRange();
-      beforeRange.setStartBefore(tagNode);
-      beforeRange.setEnd(range.startContainer, range.startOffset);
-      const beforeFrag = beforeRange.cloneContents();
-
-      const afterRange = document.createRange();
-      afterRange.setStart(range.endContainer, range.endOffset);
-      afterRange.setEndAfter(tagNode);
-      const afterFrag = afterRange.cloneContents();
-
-      const selectedFrag = range.extractContents();
-      const cleanText = document.createTextNode(selectedFrag.textContent || '');
-
-      const replacementFrag = document.createDocumentFragment();
-      if (beforeFrag.textContent) {
-        const b = document.createElement(tag);
-        b.appendChild(beforeFrag);
-        replacementFrag.appendChild(b);
-      }
-      replacementFrag.appendChild(cleanText);
-      if (afterFrag.textContent) {
-        const a = document.createElement(tag);
-        a.appendChild(afterFrag);
-        replacementFrag.appendChild(a);
-      }
-
-      tagNode.parentNode.replaceChild(replacementFrag, tagNode);
-    } else {
-      // Wrap selection in tag
-      if (range.collapsed) return;
-      const selectedContent = range.extractContents();
-      const el = document.createElement(tag);
-      el.appendChild(selectedContent);
-      range.insertNode(el);
-    }
-
-    updateFormatButtonAria();
-    activeInput.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-
-  // --- Clear Formatting Helper (Reset to Normal Plain Text) ---
-  function clearFormat() {
-    const activeInput = (document.activeElement && document.activeElement.classList.contains('sdrnow-input-area'))
-      ? document.activeElement
-      : (state.lastActiveInput || document.getElementById(`sdrnow-input-${state.currentLang}`));
-
-    if (!activeInput) return;
-    activeInput.focus();
-
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    const range = selection.getRangeAt(0);
-
-    if (!range.collapsed) {
-      // Extract contents and strip strong, em, b, i tags while preserving br and text
-      const fragment = range.extractContents();
-      const div = document.createElement('div');
-      div.appendChild(fragment);
-
-      div.querySelectorAll('strong, em, b, i').forEach((el) => {
-        const textNode = document.createTextNode(el.textContent || '');
-        el.parentNode.replaceChild(textNode, el);
-      });
-
-      // Insert cleaned text back
-      const cleanFrag = document.createDocumentFragment();
-      while (div.firstChild) {
-        cleanFrag.appendChild(div.firstChild);
-      }
-      range.insertNode(cleanFrag);
-    } else {
-      // If cursor is within a formatted tag, unwrap that tag
-      let parent = selection.anchorNode;
-      while (parent && parent !== activeInput) {
-        if (parent.nodeName && ['strong', 'em', 'b', 'i'].includes(parent.nodeName.toLowerCase())) {
-          const textNode = document.createTextNode(parent.textContent || '');
-          parent.parentNode.replaceChild(textNode, parent);
-          break;
+    function traverse(node, isEm) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.nodeValue || '';
+        for (let i = 0; i < text.length; i++) {
+          if (range && node === range.startContainer && i === range.startOffset) {
+            tokenStart = tokens.length;
+          }
+          if (range && node === range.endContainer && i === range.endOffset) {
+            tokenEnd = tokens.length;
+          }
+          tokens.push({ ch: text[i], em: isEm });
         }
-        parent = parent.parentNode;
+        if (range && node === range.startContainer && text.length === range.startOffset) {
+          tokenStart = tokens.length;
+        }
+        if (range && node === range.endContainer && text.length === range.endOffset) {
+          tokenEnd = tokens.length;
+        }
+        return;
       }
+
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.nodeName.toLowerCase();
+        if (tag === 'br') {
+          if (range && node === range.startContainer) {
+            tokenStart = tokens.length;
+          }
+          if (range && node === range.endContainer) {
+            tokenEnd = tokens.length;
+          }
+          tokens.push({ br: true });
+          return;
+        }
+
+        const nodeIsEm = isEm || ['em', 'strong', 'b', 'i'].includes(tag);
+        for (let i = 0; i < node.childNodes.length; i++) {
+          if (range && node === range.startContainer && i === range.startOffset) {
+            tokenStart = tokens.length;
+          }
+          if (range && node === range.endContainer && i === range.endOffset) {
+            tokenEnd = tokens.length;
+          }
+          traverse(node.childNodes[i], nodeIsEm);
+        }
+        if (range && node === range.startContainer && node.childNodes.length === range.startOffset) {
+          tokenStart = tokens.length;
+        }
+        if (range && node === range.endContainer && node.childNodes.length === range.endOffset) {
+          tokenEnd = tokens.length;
+        }
+      }
+    }
+
+    traverse(root, false);
+
+    if (tokenStart === -1) tokenStart = 0;
+    if (tokenEnd === -1) tokenEnd = tokens.length;
+
+    return {
+      tokens,
+      start: Math.min(tokenStart, tokenEnd),
+      end: Math.max(tokenStart, tokenEnd),
+    };
+  }
+
+  function findDomPosition(root, targetIndex) {
+    let count = 0;
+    let result = null;
+
+    function walk(node) {
+      if (result) return;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const len = node.nodeValue.length;
+        if (targetIndex <= count + len) {
+          result = { node, offset: Math.max(0, targetIndex - count) };
+          return;
+        }
+        count += len;
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        if (node.nodeName.toLowerCase() === 'br') {
+          if (targetIndex === count) {
+            const p = node.parentNode || root;
+            result = { node: p, offset: Array.prototype.indexOf.call(p.childNodes, node) };
+            return;
+          }
+          count++;
+        } else {
+          for (let i = 0; i < node.childNodes.length; i++) {
+            walk(node.childNodes[i]);
+            if (result) return;
+          }
+        }
+      }
+    }
+
+    walk(root);
+    if (!result) {
+      result = { node: root, offset: root.childNodes.length };
+    }
+    return result;
+  }
+
+  // --- Update ARIA & Visual State on Format Button ---
+  function updateFormatButtonAria() {
+    const btnEm = document.getElementById('sdrnow-btn-em');
+    if (!btnEm) return;
+
+    const activeInput = (document.activeElement && document.activeElement.classList.contains('sdrnow-input-area'))
+      ? document.activeElement
+      : state.lastActiveInput;
+
+    if (!activeInput) {
+      btnEm.style.background = TOKENS.chromeBg;
+      btnEm.style.color = TOKENS.primary;
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !activeInput.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+      btnEm.style.background = TOKENS.chromeBg;
+      btnEm.style.color = TOKENS.primary;
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const { tokens, start, end } = domToTokens(activeInput, range);
+
+    let isAllEm = false;
+    let isMixed = false;
+
+    if (start === end) {
+      let inEm = false;
+      if (tokens[start] && tokens[start].em) {
+        inEm = true;
+      } else if (start > 0 && tokens[start - 1] && tokens[start - 1].em) {
+        inEm = true;
+      }
+      isAllEm = inEm;
+    } else {
+      let emCount = 0;
+      let nonEmCount = 0;
+      for (let i = start; i < end; i++) {
+        if (!tokens[i].br) {
+          if (tokens[i].em) emCount++;
+          else nonEmCount++;
+        }
+      }
+      if (emCount > 0 && nonEmCount === 0) {
+        isAllEm = true;
+      } else if (emCount > 0 && nonEmCount > 0) {
+        isMixed = true;
+      }
+    }
+
+    // Visual hint only: Emphase is an action, not a toggle, so no aria-pressed
+    if (isAllEm) {
+      btnEm.style.background = TOKENS.primarySoft;
+      btnEm.style.color = TOKENS.primaryHover;
+    } else if (isMixed) {
+      btnEm.style.background = 'rgba(242, 101, 34, 0.08)';
+      btnEm.style.color = TOKENS.primary;
+    } else {
+      btnEm.style.background = TOKENS.chromeBg;
+      btnEm.style.color = TOKENS.primary;
+    }
+  }
+
+  // --- Format Action (Flatten -> Apply -> Reserialize) ---
+  function applyFormat(isEmphasis) {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+
+    // E10: act only on a selection already inside a drawer field. Never refocus a field first:
+    // the browser would put the caret at position 0 and Normal would strip an emphasis there.
+    const container = range.commonAncestorContainer;
+    const containerEl = container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement;
+    const activeInput = containerEl ? containerEl.closest('.sdrnow-input-area') : null;
+    if (!activeInput) return;
+    activeInput.focus();
+
+    if (!emphasisModel) return;
+    const { tokens, start, end } = domToTokens(activeInput, range);
+    const formattedTokens = emphasisModel.applyTokensFormat(tokens, start, end, isEmphasis);
+    // tokensToHtml escapes &, <, > and U+00A0, so typed text is never re-read as markup
+    const newHtml = emphasisModel.tokensToHtml(formattedTokens);
+
+    activeInput.innerHTML = newHtml;
+
+    // Restore selection
+    try {
+      const newRange = document.createRange();
+      const startPos = findDomPosition(activeInput, start);
+      const endPos = findDomPosition(activeInput, end);
+      newRange.setStart(startPos.node, startPos.offset);
+      newRange.setEnd(endPos.node, endPos.offset);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    } catch {
+      // Keep focus on activeInput
     }
 
     updateFormatButtonAria();
@@ -388,14 +489,11 @@
 
         <!-- Semantic Format Toolbar -->
         <div id="sdrnow-format-toolbar" style="display: flex; align-items: center; gap: 6px;">
-          <button id="sdrnow-btn-bold" type="button" aria-pressed="false" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.chromeText}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 700; cursor: pointer;">
-            B Gras
+          <button id="sdrnow-btn-em" type="button" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.primary}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
+            🔶 Emphase · orange
           </button>
-          <button id="sdrnow-btn-em" type="button" aria-pressed="false" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.primary}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
-            🔶 Emphase Orange
-          </button>
-          <button id="sdrnow-btn-normal" type="button" title="Supprimer le formatage sur la sélection (Cmd/Ctrl + \)" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.chromeMuted}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 500; cursor: pointer;">
-            ⊘ Texte Normal
+          <button id="sdrnow-btn-normal" type="button" title="Remettre la sélection en texte normal (Cmd/Ctrl + \)" style="background: ${TOKENS.chromeBg}; color: ${TOKENS.chromeMuted}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 500; cursor: pointer;">
+            ⊘ Normal
           </button>
           <span id="sdrnow-plain-badge" style="display: none; font-size: 12px; color: ${TOKENS.chromeMuted};">
             🔒 Texte brut (sans style ni retour à la ligne)
@@ -435,10 +533,6 @@
     // Style contenteditable inner tags & edit-mode empty elements
     const styleEl = document.createElement('style');
     styleEl.textContent = `
-      .sdrnow-input-area strong {
-        font-weight: 700;
-        color: #FFFFFF;
-      }
       .sdrnow-input-area em {
         font-style: normal;
         color: #F26522;
@@ -467,9 +561,9 @@
 
   // --- Open Drawer for Given Key ---
   function openDrawerForKey(key) {
-    const btnBold = document.getElementById('sdrnow-btn-bold');
     const btnEm = document.getElementById('sdrnow-btn-em');
     const btnNormal = document.getElementById('sdrnow-btn-normal');
+    const plainBadge = document.getElementById('sdrnow-plain-badge');
     const inputFr = document.getElementById('sdrnow-input-fr');
     const inputEn = document.getElementById('sdrnow-input-en');
     const drawer = document.getElementById('sdrnow-bottom-drawer');
@@ -483,23 +577,95 @@
     const typeBadge = document.getElementById('sdrnow-drawer-type-badge');
     typeBadge.textContent = fieldDef.type === 'rich' ? '• Texte Riche' : '• Texte Brut';
 
-    // Format toolbar
+    // Format toolbar & Dynamic Emphasis Probe
     if (fieldDef.type === 'rich') {
-      btnBold.style.display = 'inline-block';
       btnEm.style.display = 'inline-block';
       if (btnNormal) btnNormal.style.display = 'inline-block';
-      btnEm.textContent = (key === 'pricing.title') ? '🔶 Emphase Soulignée' : '🔶 Emphase Orange';
-      document.getElementById('sdrnow-plain-badge').style.display = 'none';
+      plainBadge.style.display = 'none';
+
+      // Dynamic probe on page node
+      let emLabel = '🔶 Emphase · orange';
+      let drawerEmCss = `
+        font-style: normal;
+        color: #F26522;
+        background: rgba(242, 101, 34, 0.15);
+        padding: 0 2px;
+        border-radius: 2px;
+      `;
+
+      const targetEl = document.querySelector(`[data-i18n="${key}"]`);
+      if (targetEl && targetEl.tagName !== 'TITLE') {
+        const probe = document.createElement('em');
+        probe.textContent = 'x';
+        targetEl.appendChild(probe);
+
+        const probeStyle = window.getComputedStyle(probe);
+        const targetStyle = window.getComputedStyle(targetEl);
+
+        const emColor = probeStyle.color;
+        const targetColor = targetStyle.color;
+        const emWeight = probeStyle.fontWeight;
+        const targetWeight = targetStyle.fontWeight;
+        const emTextDec = probeStyle.textDecorationLine || probeStyle.textDecoration || '';
+
+        targetEl.removeChild(probe);
+
+        const isUnderline = emTextDec.includes('underline');
+        const isBold = (parseInt(emWeight, 10) >= 600 || emWeight === 'bold');
+        const isColorInherited = (emColor === targetColor);
+
+        if (isUnderline) {
+          emLabel = '🔶 Emphase · soulignée';
+          drawerEmCss = `
+            font-style: normal;
+            color: #FFFFFF;
+            text-decoration: underline;
+            text-decoration-color: #FFFFFF;
+            background: transparent;
+            padding: 0 2px;
+          `;
+        } else if (isBold && isColorInherited) {
+          emLabel = '🔶 Emphase · gras';
+          drawerEmCss = `
+            font-style: normal;
+            color: #FFFFFF;
+            font-weight: 700;
+            text-decoration: none;
+            background: transparent;
+            padding: 0 2px;
+          `;
+        } else {
+          emLabel = '🔶 Emphase · orange';
+          drawerEmCss = `
+            font-style: normal;
+            color: #F26522;
+            font-weight: inherit;
+            text-decoration: none;
+            background: rgba(242, 101, 34, 0.15);
+            padding: 0 2px;
+            border-radius: 2px;
+          `;
+        }
+      }
+
+      btnEm.textContent = emLabel;
+
+      let drawerStyleEl = document.getElementById('sdrnow-drawer-em-style');
+      if (!drawerStyleEl) {
+        drawerStyleEl = document.createElement('style');
+        drawerStyleEl.id = 'sdrnow-drawer-em-style';
+        document.head.appendChild(drawerStyleEl);
+      }
+      drawerStyleEl.textContent = `.sdrnow-input-area em { ${drawerEmCss} }`;
     } else {
-      btnBold.style.display = 'none';
       btnEm.style.display = 'none';
       if (btnNormal) btnNormal.style.display = 'none';
-      document.getElementById('sdrnow-plain-badge').style.display = 'inline-block';
+      plainBadge.style.display = 'inline-block';
     }
 
     // Populate values
-    inputFr.innerHTML = state.translations.fr[key] || '';
-    inputEn.innerHTML = state.translations.en[key] || '';
+    setNodeValue(inputFr, key, state.translations.fr[key] || '');
+    setNodeValue(inputEn, key, state.translations.en[key] || '');
 
     // Clear errors
     document.getElementById('sdrnow-err-fr').style.display = 'none';
@@ -531,7 +697,6 @@
     const btnPublish = document.getElementById('sdrnow-btn-publish');
     const btnReset = document.getElementById('sdrnow-btn-reset');
     const btnCloseDrawer = document.getElementById('sdrnow-btn-close-drawer');
-    const btnBold = document.getElementById('sdrnow-btn-bold');
     const btnEm = document.getElementById('sdrnow-btn-em');
     const inputFr = document.getElementById('sdrnow-input-fr');
     const inputEn = document.getElementById('sdrnow-input-en');
@@ -661,14 +826,17 @@
     // 6. Input Live DOM Sync
     function handleInputSync(lang, inputEl) {
       if (!state.activeKey) return;
-      const html = inputEl.innerHTML;
-      state.translations[lang][state.activeKey] = html;
+      // Plain fields store their text (so « R&D » stays R&D, not R&amp;D), rich fields their HTML
+      const value = isPlainKey(state.activeKey)
+        ? inputEl.textContent.replace(/[\r\n]+/g, ' ')
+        : inputEl.innerHTML;
+      state.translations[lang][state.activeKey] = value;
       setDirty(true);
 
       // If page currently matches this language, update the DOM in real-time
       if (state.currentLang === lang) {
         if (state.activeElement) {
-          state.activeElement.innerHTML = html;
+          setNodeValue(state.activeElement, state.activeKey, value);
         } else if (state.activeKey.startsWith('meta.')) {
           if (state.activeKey === 'meta.description') {
             const metaEl = document.querySelector('meta[data-i18n-content="meta.description"]');
@@ -697,22 +865,17 @@
     inputEn.addEventListener('input', () => handleInputSync('en', inputEn));
 
     // 7. Prevent Toolbar Buttons from blurring contenteditable (mousedown preventDefault)
-    btnBold.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-    });
     btnEm.addEventListener('mousedown', (e) => {
       e.preventDefault();
     });
-
-    btnBold.addEventListener('click', () => toggleFormat('strong'));
-    btnEm.addEventListener('click', () => toggleFormat('em'));
+    btnEm.addEventListener('click', () => applyFormat(true));
 
     const btnNormal = document.getElementById('sdrnow-btn-normal');
     if (btnNormal) {
       btnNormal.addEventListener('mousedown', (e) => {
         e.preventDefault();
       });
-      btnNormal.addEventListener('click', () => clearFormat());
+      btnNormal.addEventListener('click', () => applyFormat(false));
     }
 
     // 8. Keyboard Interceptions (Paste, Enter, Cmd+B/I/U/Slash)
@@ -737,29 +900,26 @@
           return;
         }
 
-        // Cmd/Ctrl + B
+        // Cmd/Ctrl + B : blocked
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
           e.preventDefault();
-          if (state.activeType === 'rich') {
-            toggleFormat('strong');
-          }
           return;
         }
 
-        // Cmd/Ctrl + I
+        // Cmd/Ctrl + I : Emphase (idempotent)
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
           e.preventDefault();
           if (state.activeType === 'rich') {
-            toggleFormat('em');
+            applyFormat(true);
           }
           return;
         }
 
-        // Cmd/Ctrl + \ : Clear formatting
+        // Cmd/Ctrl + \ : Normal (idempotent)
         if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
           e.preventDefault();
           if (state.activeType === 'rich') {
-            clearFormat();
+            applyFormat(false);
           }
           return;
         }
@@ -782,9 +942,7 @@
       // Validate all required fields
       for (const [key, fieldDef] of Object.entries(state.schema)) {
         if (!fieldDef.optional) {
-          const frText = (state.translations.fr[key] || '').replace(/<[^>]*>/g, '').trim();
-          const enText = (state.translations.en[key] || '').replace(/<[^>]*>/g, '').trim();
-          if (!frText || !enText) {
+          if (isBlankValue(key, state.translations.fr[key]) || isBlankValue(key, state.translations.en[key])) {
             showToast(`Le champ "${key}" ne peut pas être vide.`, 'error');
             return;
           }
