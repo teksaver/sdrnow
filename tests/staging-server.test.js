@@ -211,14 +211,16 @@ test('pure token format: E3 (idempotence -> Emphase)', () => {
   assert.equal(res, '<em>orange</em>');
 });
 
-test('pure token format: E4 (fusion contiguë -> Emphase)', () => {
+test('pure token format: E4 (respect strict de la sélection -> Emphase)', () => {
   const html = '<em>a</em> et <em>b</em>';
   const tokens = htmlToTokens(html);
   const text = tokens.map((t) => t.ch).join('');
+  // Only the selected characters change: the unselected spaces stay normal
   const start = text.indexOf('et');
   const end = start + 'et'.length;
-  const res = tokensToHtml(applyTokensFormat(tokens, start, end, true));
-  assert.equal(res, '<em>a et b</em>');
+  assert.equal(tokensToHtml(applyTokensFormat(tokens, start, end, true)), '<em>a</em> <em>et</em> <em>b</em>');
+  // Selecting the whole span gives a single emphasis
+  assert.equal(tokensToHtml(applyTokensFormat(tokens, 0, text.length, true)), '<em>a et b</em>');
 });
 
 test('pure token format: E5 (reset complet -> Normal)', () => {
@@ -304,6 +306,7 @@ const EMPHASIS_CASES = {
   E2: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('mot <em>orange</em> fin'), 0, 'mot orange'.length, true)),
   E3: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>orange</em>'), 2, 5, true)),
   E4: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>a</em> et <em>b</em>'), 2, 4, true)),
+  E4b: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>a</em> et <em>b</em>'), 0, 6, true)),
   E5: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>a</em> et <em>b</em>'), 0, 6, false)),
   E6: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('<em>ligne 1<br>ligne 2</em>'), 6, 13, false)),
   E7: (m) => m.tokensToHtml(m.applyTokensFormat(m.htmlToTokens('Appel de 100 leads ou'), 8, 19, true)),
@@ -322,7 +325,8 @@ test('pure token format: E1-E11 shared cases give the expected markup', () => {
     E1: '<em>Votre</em> SDR externalisé <em>dès demain</em>',
     E2: '<em>mot orange</em> fin',
     E3: '<em>orange</em>',
-    E4: '<em>a et b</em>',
+    E4: '<em>a</em> <em>et</em> <em>b</em>',
+    E4b: '<em>a et b</em>',
     E5: 'a et b',
     E6: '<em>ligne</em> 1<br>ligne <em>2</em>',
     E7: 'Appel de <em>100 leads</em> ou',
@@ -369,7 +373,9 @@ test('sanitizeValue: no double escaping, unterminated tags escaped, &nbsp; stabl
   // &nbsp; round-trip, and whitespace pushed out of <em> / trimmed like a regular space
   assert.equal(sanitizeValue('dès&nbsp;demain&nbsp;!', 'rich'), 'dès&nbsp;demain&nbsp;!');
   assert.equal(sanitizeValue('mot&nbsp;<em>&nbsp;orange&nbsp;</em>&nbsp;fin', 'rich'), 'mot&nbsp;&nbsp;<em>orange</em>&nbsp;&nbsp;fin');
-  assert.equal(sanitizeValue('<em>a</em>&nbsp;<em>b</em>', 'rich'), '<em>a&nbsp;b</em>');
+  // A normal space between two emphases is the author's choice: kept, not merged
+  assert.equal(sanitizeValue('<em>a</em>&nbsp;<em>b</em>', 'rich'), '<em>a</em>&nbsp;<em>b</em>');
+  assert.equal(sanitizeValue('<em>Votre</em> <em>SDR</em>', 'rich'), '<em>Votre</em> <em>SDR</em>');
   assert.equal(sanitizeValue('<em>&nbsp;</em>', 'rich'), '');
   assert.equal(sanitizeValue('&nbsp; texte &nbsp;', 'rich'), 'texte');
 });

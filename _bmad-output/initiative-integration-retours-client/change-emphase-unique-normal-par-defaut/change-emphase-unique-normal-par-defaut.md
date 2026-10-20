@@ -120,7 +120,8 @@ Les étapes 1, 3 et 4 sont des **fonctions pures** (jetons ↔ chaîne), regroup
 | E1 | `<em>Votre SDR externalisé dès demain</em>` | « SDR externalisé » → Normal | `<em>Votre</em> SDR externalisé <em>dès demain</em>` |
 | E2 | `mot <em>orange</em> fin` | « mot orange » → Emphase | `<em>mot orange</em> fin` |
 | E3 | `<em>orange</em>` | « ran » → Emphase | `<em>orange</em>` (inchangé, idempotent) |
-| E4 | `<em>a</em> et <em>b</em>` | « et » → Emphase | `<em>a et b</em>` (fusion) |
+| E4 | `<em>a</em> et <em>b</em>` | « et » → Emphase | `<em>a</em> <em>et</em> <em>b</em>` (respect strict : les espaces non sélectionnés restent normaux) — amendé en revue le 2026-10-20 |
+| E4b | `<em>a</em> et <em>b</em>` | « a et b » → Emphase | `<em>a et b</em>` (fusion des suites contiguës) |
 | E5 | `<em>a</em> et <em>b</em>` | tout → Normal | `a et b` |
 | E6 | `<em>ligne 1<br>ligne 2</em>` | « 1<br>ligne » → Normal | `<em>ligne</em> 1<br>ligne <em>2</em>` |
 | E7 | `Appel de 100 leads ou` | « ␣100 leads␣ » (espaces inclus, double-clic typique) → Emphase | `Appel de <em>100 leads</em> ou` (espaces rejetés hors de l'emphase) |

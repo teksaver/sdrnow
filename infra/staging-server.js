@@ -187,22 +187,6 @@ function renderTokensLine(line) {
     }
   }
 
-  let merged = true;
-  while (merged) {
-    merged = false;
-    for (let i = 1; i < runs.length - 1; i++) {
-      if (!runs[i].em && runs[i - 1].em && runs[i + 1].em) {
-        const text = runs[i].chars.join('');
-        if (/^\s+$/.test(text)) {
-          runs[i - 1].chars.push(...runs[i].chars, ...runs[i + 1].chars);
-          runs.splice(i, 2);
-          merged = true;
-          break;
-        }
-      }
-    }
-  }
-
   let html = '';
   for (const run of runs) {
     const text = run.chars.join('');
