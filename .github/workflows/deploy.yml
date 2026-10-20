@@ -126,9 +126,8 @@ jobs:
           # 3. Attendre que cloud-init ait terminé
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo cloud-init status --wait || true"
 
-          # 4. Déployer la configuration Caddy
-          scp $SSH_OPTS Caddyfile.template deploy@$SERVER_IP:/tmp/Caddyfile
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html /var/www/staging && sudo cp /tmp/Caddyfile /etc/caddy/Caddyfile && rm /tmp/Caddyfile && (sudo systemctl reload caddy 2>/dev/null || true)"
+          # 4. Préparer les dossiers (la configuration Caddy est déployée après Node, étape 8b)
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /var/www/html /var/www/staging"
 
           # 5. Installer Node 20 si non présent (idempotent)
           ssh $SSH_OPTS deploy@$SERVER_IP "if ! command -v node >/dev/null 2>&1; then curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs; fi"
@@ -150,9 +149,21 @@ jobs:
             "GITHUB_REPO=${{ github.repository }}" \
             "STAGING_DIR=/var/www/staging" \
             "PROD_DIR=/var/www/html" \
-            "EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js" > /tmp/staging.env
+            "EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js" \
+            "ANALYTICS_FILE=/etc/sdrnow/analytics.jsonl" \
+            "STAGING_ANALYTICS_FILE=/etc/sdrnow/analytics-staging.jsonl" \
+            "CTA_TARGET_HERO=${{ vars.CTA_TARGET_HERO }}" \
+            "CTA_TARGET_STARTER=${{ vars.CTA_TARGET_STARTER }}" \
+            "CTA_TARGET_STRATEGY=${{ vars.CTA_TARGET_STRATEGY }}" > /tmp/staging.env
           scp $SSH_OPTS /tmp/staging.env deploy@$SERVER_IP:/tmp/staging.env
-          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /etc/sdrnow && sudo cp /tmp/staging.env /etc/sdrnow/staging.env && sudo chmod 0600 /etc/sdrnow/staging.env && sudo chown caddy:caddy /etc/sdrnow/staging.env && rm /tmp/staging.env"
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /etc/sdrnow && sudo chown caddy:caddy /etc/sdrnow && sudo cp /tmp/staging.env /etc/sdrnow/staging.env && sudo chmod 0600 /etc/sdrnow/staging.env && sudo chown caddy:caddy /etc/sdrnow/staging.env && rm -f /tmp/staging.env"
+          rm -f /tmp/staging.env
+
+          # 8b. Redémarrer Node (nouveau code + env) AVANT de recharger Caddy : le Caddyfile route
+          #     désormais le trafic sdrnow.fr vers Node (fallback statique si Node est indisponible)
+          ssh $SSH_OPTS deploy@$SERVER_IP "(sudo systemctl restart sdrnow-staging.service 2>/dev/null || true)"
+          scp $SSH_OPTS Caddyfile.template deploy@$SERVER_IP:/tmp/Caddyfile
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo cp /tmp/Caddyfile /etc/caddy/Caddyfile && rm /tmp/Caddyfile && (sudo systemctl reload caddy 2>/dev/null || true)"
 
           # 9. Déterminer le dossier de destination selon la branche
           if [ "${{ github.ref }}" = "refs/heads/staging" ]; then

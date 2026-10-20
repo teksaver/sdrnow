@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BMad Forge Report — Cookieless Server-Side Tracking (SDRnow)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-alt: #0f172a;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #f97316;
+      --accent-soft: rgba(249, 115, 22, 0.14);
+      --green: #10b981;
+      --green-soft: rgba(16, 185, 129, 0.14);
+      --red: #ef4444;
+      --red-soft: rgba(239, 68, 68, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    .header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 0.75rem;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+    .seal-wrap {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .section h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 1rem;
+    }
+    .pill-card {
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem 1.2rem;
+    }
+    .pill-card h3 {
+      font-size: 0.98rem;
+      font-weight: 700;
+      margin-bottom: 0.45rem;
+      color: var(--text);
+    }
+    .pill-card p, .pill-card li {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .pill-card ul {
+      padding-left: 1.1rem;
+      margin-top: 0.4rem;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.18rem 0.55rem;
+      border-radius: 999px;
+      margin-bottom: 0.5rem;
+    }
+    .tag-lock { background: var(--green-soft); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+    .tag-reject { background: var(--red-soft); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+    .tag-crack { background: var(--amber-soft); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.84em;
+      background: rgba(255,255,255,0.08);
+      color: #fdba74;
+      padding: 0.12rem 0.38rem;
+      border-radius: 4px;
+    }
+    .persona-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 0.9rem;
+    }
+    .persona-card {
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+    .persona-head {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.45rem;
+    }
+    .persona-icon {
+      font-size: 1.35rem;
+    }
+    .persona-name {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .persona-role {
+      font-size: 0.78rem;
+      color: var(--accent);
+    }
+    .persona-voice {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .footer-meta {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <div class="eyebrow">BMad Idea Forge • Initiative : initiative-integration-retours-client</div>
+        <h1>Suivi Prospects &amp; Audience Server-Side Sans Cookies</h1>
+        <p class="subtitle">
+          Architecture de télémétrie B2B furtive, sans bandeau RGPD, taillée pour la landing page statique Astro + Caddy et l'instance Scaleway <code>STARDUST1-S</code>.
+        </p>
+      </div>
+      <div class="seal-wrap" aria-label="Outcome: HARDENED">
+        <svg width="138" height="138" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="wax" cx="50%" cy="40%" r="55%">
+              <stop offset="0%" stop-color="#34d399"/>
+              <stop offset="65%" stop-color="#059669"/>
+              <stop offset="100%" stop-color="#065f46"/>
+            </radialGradient>
+          </defs>
+          <circle cx="70" cy="70" r="62" fill="url(#wax)" stroke="#a7f3d0" stroke-width="2.5" stroke-dasharray="6 3"/>
+          <circle cx="70" cy="70" r="52" fill="none" stroke="#d1fae5" stroke-width="1.5" opacity="0.7"/>
+          <path d="M44 52 L70 38 L96 52" fill="none" stroke="#ecfdf5" stroke-width="2" stroke-linecap="round"/>
+          <text x="70" y="75" text-anchor="middle" fill="#ffffff" font-family="ui-monospace, monospace" font-weight="900" font-size="16" letter-spacing="2">HARDENED</text>
+          <text x="70" y="93" text-anchor="middle" fill="#d1fae5" font-family="sans-serif" font-weight="700" font-size="8.5" letter-spacing="1.5">SCELLEMENT B2B</text>
+          <text x="70" y="106" text-anchor="middle" fill="#a7f3d0" font-family="monospace" font-size="8">2026-10-20</text>
+        </svg>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>🔒 Décisions Verrouillées (Locks)</h2>
+      <div class="grid-2">
+        <div class="pill-card">
+          <span class="tag tag-lock">Lock 1 • Entrées &amp; URLs</span>
+          <h3>Zéro <code>?</code> dans les URLs (2 points d'entrée)</h3>
+          <ul>
+            <li><strong>Cas 1 (Lien prospect) :</strong> Réécriture serveur transparente sur <code>/pour/&lt;slug&gt;</code> ou <code>/offre/&lt;slug&gt;</code> (EN : <code>/en/for/&lt;slug&gt;</code>) avec <code>X-Robots-Tag: noindex, nofollow</code>. Créé à la volée sans back-office préalable ; survit au copier-coller entre décideurs.</li>
+            <li><strong>Cas 2 (Landing directe <code>/</code>) :</strong> L'URL reste vierge. Toute la consultation (et la revisite du jour) est reliée en coulisses via <code>anon_id = SHA256(sel_jour + IP + UA).slice(0,8)</code>.</li>
+          </ul>
+        </div>
+
+        <div class="pill-card">
+          <span class="tag tag-lock">Lock 2 • Classification 3 Niveaux</span>
+          <h3>Filtrage Bots, Adblock &amp; Télémétrie Furtive</h3>
+          <ul>
+            <li><strong>Niveau 1 (Bots / Aperçus LinkedIn, Slack, SafeLinks) :</strong> <code>GET</code> HTML seul sans chargement du CSS/logo ou UA bot → exclus des stats et alertes.</li>
+            <li><strong>Niveau 2 (Humain sous Adblock / Sans JS) :</strong> HTML + CSS chargés sans ping JS → comptabilisé dans les stats (« Adblock/Sans JS ») + alerte prospect active.</li>
+            <li><strong>Niveau 3 (Humain complet) :</strong> Pings JS sur l'endpoint furtif <code>POST /health</code> (&lt; 512 octets, rate-limité).</li>
+          </ul>
+        </div>
+
+        <div class="pill-card">
+          <span class="tag tag-lock">Lock 3 • Signaux d'Intention B2B</span>
+          <h3>Comportements à fort signal commercial</h3>
+          <ul>
+            <li><strong>3 CTAs Calendly propres :</strong> Redirections 302 via <code>/rdv/decouverte</code>, <code>/rdv/starter</code>, <code>/rdv/strategy</code> (et <code>/en/book/...</code>).</li>
+            <li><strong>Partage interne multi-décideurs :</strong> Détection de plusieurs <code>anon_id</code> (appareils) ou revisites à J+N sur un même <code>/pour/&lt;slug&gt;</code>.</li>
+            <li><strong>Lecture &amp; Micro-conversions :</strong> Temps actif (<code>visibilityState</code>), vue du bloc <code>Pricing</code>, copie (<code>Ctrl+C</code>) dans les offres, clic/copie téléphone (<code>06 67 90 24 94</code>) ou mail, switch <code>FR↔EN</code>, clic <code>/mentions-legales</code> et export PDF (<code>beforeprint</code>).</li>
+          </ul>
+        </div>
+
+        <div class="pill-card">
+          <span class="tag tag-lock">Lock 4 • Infra, Alertes &amp; Légal</span>
+          <h3>Intégration <code>STARDUST1-S</code> &amp; Alerting</h3>
+          <ul>
+            <li><strong>Stockage &amp; UI :</strong> Fichier <code>/etc/sdrnow/analytics.jsonl</code> + page <code>staging.sdrnow.fr/stats</code> intégrés à <code>infra/staging-server.js</code> (0 Mo RAM en plus).</li>
+            <li><strong>Alertes Email via API HTTPS (<code>fetch</code> natif, ex: Scaleway TEM) :</strong>
+              1) Alerte groupée (debounce 2 min) sur chaque visite humaine de <code>/pour/&lt;slug&gt;</code>.<br/>
+              2) Digest à minuit pour les visites anonymes <strong>uniquement si &ge; 1 visite humaine</strong> dans la journée.</li>
+            <li><strong>Légal (<code>legal.s4_text</code>) :</strong> Zéro bandeau cookie ; mention transparente de l'absence de cookies et du suivi B2B sur intérêt légitime (RGPD Art. 6.1.f).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>⚡ Failles Déjouées (Cracks Survived)</h2>
+      <div class="grid-2">
+        <div class="pill-card">
+          <span class="tag tag-crack">Crack 1 • Code Existant</span>
+          <h3>Contradiction dans <code>translations.json</code></h3>
+          <p>La clé <code>legal.s4_text</code> actuelle affirmait <em>« ne collecte aucune donnée personnelle à l'insu des utilisateurs »</em>, ce qui aurait rendu illégal le suivi nominatif d'un lien prospect sans mise à jour.</p>
+        </div>
+        <div class="pill-card">
+          <span class="tag tag-crack">Crack 2 • One-Page &amp; Bots</span>
+          <h3>Aveuglement des CTAs externes &amp; faux positifs LinkedIn</h3>
+          <p>Les 3 CTAs pointaient en dur vers <code>calendly.com</code> (invisibles côté serveur), et les robots d'aperçu (<code>LinkedInBot</code>, <code>SafeLinks</code>) auraient déclenché de fausses alertes d'ouverture dès l'envoi d'un message sans la validation du chargement CSS.</p>
+        </div>
+        <div class="pill-card">
+          <span class="tag tag-crack">Crack 3 • Matériel Scaleway</span>
+          <h3>Limite physique de la <code>STARDUST1-S</code> (1 Go RAM)</h3>
+          <p>Identifiée dans <code>infra/main.tf</code> (ligne 50) : toute stack lourde et les ports SMTP sortants bloqués par défaut sur Stardust imposaient une architecture fichier <code>.jsonl</code> et un envoi d'email en HTTPS (port 443).</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>🗑️ Options Rejetées &amp; Pourquoi</h2>
+      <div class="grid-2">
+        <div class="pill-card">
+          <span class="tag tag-reject">Rejeté</span>
+          <h3>Query strings <code>?v=</code>, <code>?ref=</code> ou <code>?cta=</code></h3>
+          <p>Flagge immédiatement le pistage dans la barre d'adresse ou au survol des boutons, et détruit l'effet de réassurance B2B.</p>
+        </div>
+        <div class="pill-card">
+          <span class="tag tag-reject">Rejeté</span>
+          <h3>URL aléatoire créée à la volée sur <code>/</code> (Cas 2)</h3>
+          <p>Rediriger un visiteur anonyme de <code>/</code> vers <code>/v/8f3a</code> est requalifié en traceur (<em>URL decoration</em>) par la CNIL et dégrade l'UX alors que le hash serveur <code>anon_id</code> suffit.</p>
+        </div>
+        <div class="pill-card">
+          <span class="tag tag-reject">Rejeté</span>
+          <h3>Stack OpenTelemetry + Dashboard tiers</h3>
+          <p>Disproportionné pour 1 Go de RAM (<code>OOM Killer</code>) et illisible pour un profil commercial B2B.</p>
+        </div>
+        <div class="pill-card">
+          <span class="tag tag-reject">Rejeté</span>
+          <h3>Digest quotidien envoyé à 0 visite &amp; Heatmaps</h3>
+          <p>Un mail quotidien affichant « 0 visiteur » crée une cécité aux alertes en 10 jours ; les heatmaps souris n'apportent aucune décision commerciale.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>🎭 Personas ayant mis l'idée à l'épreuve</h2>
+      <div class="persona-grid">
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">📋</span>
+            <div>
+              <div class="persona-name">John</div>
+              <div class="persona-role">Product Manager (BMad)</div>
+            </div>
+          </div>
+          <p class="persona-voice">A forcé la distinction entre compteur d'audience passif et suivi d'ouverture de lien prospect post-prospection.</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">😤</span>
+            <div>
+              <div class="persona-name">Grumbal</div>
+              <div class="persona-role">The Adversary (Custom)</div>
+            </div>
+          </div>
+          <p class="persona-voice">A exposé la contradiction frontale avec la phrase actuelle de <code>legal.s4_text</code> dans <code>translations.json</code>.</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">🏗️</span>
+            <div>
+              <div class="persona-name">Winston</div>
+              <div class="persona-role">System Architect (BMad)</div>
+            </div>
+          </div>
+          <p class="persona-voice">A mis en évidence l'aveuglement HTTP sur les liens externes Calendly et la corrélation <code>anon_id</code> sans toucher à l'URL.</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">🌶️</span>
+            <div>
+              <div class="persona-name">Boundary</div>
+              <div class="persona-role">Edge-Case Hunter (Custom)</div>
+            </div>
+          </div>
+          <p class="persona-voice">A soulevé le piège des robots de prévisualisation (<code>LinkedInBot</code>, <code>SafeLinks</code>) lors du calcul d'Adblock par soustraction.</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">📊</span>
+            <div>
+              <div class="persona-name">Mary</div>
+              <div class="persona-role">Business Analyst (BMad)</div>
+            </div>
+          </div>
+          <p class="persona-voice">A relié le suivi serveur au Rôle 2 du site (convaincre plusieurs décideurs) : multi-empreintes, copie des prix et clic téléphone.</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">🎨</span>
+            <div>
+              <div class="persona-name">Sally</div>
+              <div class="persona-role">UX Designer (BMad)</div>
+            </div>
+          </div>
+          <p class="persona-voice">A défendu la création de liens à la volée zéro-friction pour Jean-Charles et la propreté visuelle de la barre d'adresse.</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">🎯</span>
+            <div>
+              <div class="persona-name">Yui &amp; 💻 Amelia</div>
+              <div class="persona-role">Craftsman &amp; Senior Dev</div>
+            </div>
+          </div>
+          <p class="persona-voice">Ont ancré la solution dans <code>infra/staging-server.js</code> et la limite de 1 Go RAM de la <code>STARDUST1-S</code> (<code>infra/main.tf</code>).</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">🔒</span>
+            <div>
+              <div class="persona-name">Vex &amp; 🚢 Dana</div>
+              <div class="persona-role">Security &amp; Pragmatist</div>
+            </div>
+          </div>
+          <p class="persona-voice">Ont verrouillé les routes propres <code>/rdv/...</code>, le rate-limit sur <code>/health</code> et le digest de minuit conditionnel.</p>
+        </div>
+        <div class="persona-card">
+          <div class="persona-head">
+            <span class="persona-icon">⚖️</span>
+            <div>
+              <div class="persona-name">Clara, Lucas, Bastien, Romain &amp; Hugo</div>
+              <div class="persona-role">Personas Invitées (RGPD, AdTech, Infra, SDR, Scaleway)</div>
+            </div>
+          </div>
+          <p class="persona-voice">Ont apporté les garde-fous CNIL/ePrivacy, anti-EasyPrivacy, anti-scanners 404, anti-fatigue d'alerte et contournement SMTP Scaleway via HTTPS.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-meta">
+      Forged Idea : <code>_bmad-output/initiative-integration-retours-client/forge-cookieless-server-tracking/forge-cookieless-server-tracking.md</code>
+    </div>
+  </div>
+</body>
+</html>

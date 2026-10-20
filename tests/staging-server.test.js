@@ -18,6 +18,13 @@ import {
   computePreviewToken,
   getRevision,
   incrementRevision,
+  createTracker,
+  sendTemEmail,
+  classifyUa,
+  uaFamily,
+  getCtaTargets,
+  parseRecipients,
+  escapeHtmlAttr,
 } from '../infra/staging-server.js';
 
 const TEST_SECRET = 'test-secret-12345';
@@ -118,6 +125,7 @@ function mockRequest(handler, url, options = {}) {
     req.url = url;
     req.method = method;
     req.headers = headers;
+    req.socket = { remoteAddress: options.remoteAddress || '127.0.0.1' };
 
     let statusCode = 200;
     const resHeaders = {};
@@ -533,6 +541,7 @@ test('Server: Gatekeeper authentication logic (AD-7)', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   try {
@@ -563,6 +572,7 @@ test('Server: Gatekeeper authentication logic (AD-7)', async () => {
       adminUser: 'client,admin',
       adminPassSha256: TEST_ADMIN_PASS_SHA256,
       secret: TEST_SECRET,
+      stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
     });
     const clientAuth = Buffer.from(`client:${TEST_ADMIN_PASS}`).toString('base64');
     const resClient = await mockRequest(handlerMulti, '/', {
@@ -619,6 +629,7 @@ test('Server: API staging mutation and atomic patch (<10ms)', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -685,6 +696,7 @@ test('Server: API publish mutates both Staging and Prod', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -743,6 +755,7 @@ test('Server: API reset restores Staging from Prod without touching Prod', async
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -778,6 +791,7 @@ test('Server: Preview token invalidation on Staging mutation', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -829,6 +843,7 @@ test('Server: GET /api/translations returns schema, fr, en, previewToken, previe
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -861,6 +876,7 @@ test('Server: Access control on /__editor.js (admin only)', async () => {
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
     editorScriptPath: editorPath,
   });
 
@@ -899,6 +915,7 @@ test('Server: served /__editor.js = emphasis model prelude + real editor-client.
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
     editorScriptPath: path.join(process.cwd(), 'infra', 'editor-client.js'),
   });
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -935,6 +952,7 @@ test('Server: POST /api/reset gracefully falls back when prod translations.json 
     adminUser: TEST_ADMIN_USER,
     adminPassSha256: TEST_ADMIN_PASS_SHA256,
     secret: TEST_SECRET,
+    stagingAnalyticsFile: path.join(baseTmp, 'analytics-staging.jsonl'),
   });
 
   const adminAuth = Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64');
@@ -973,3 +991,916 @@ test('Server: POST /api/reset gracefully falls back when prod translations.json 
   }
 });
 
+
+// ==========================================
+// Cookieless server-side tracking (spec cookieless-server-tracking, I/O matrix)
+// ==========================================
+
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
+const LINKEDIN_BOT_UA = 'LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +http://www.linkedin.com)';
+const TEST_IPS = ['203.0.113.7', '198.51.100.23', '192.0.2.44', '203.0.113.99', '198.51.100.250'];
+const CTA = {
+  hero: 'https://cal.example/hero',
+  starter: 'https://cal.example/starter',
+  strategy: 'https://cal.example/strategy',
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function setupTracking(trackerOptions = {}) {
+  const dirs = setupTestDirs();
+  fs.mkdirSync(path.join(dirs.prodDir, 'assets'), { recursive: true });
+  fs.writeFileSync(path.join(dirs.prodDir, 'assets', 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+  fs.mkdirSync(path.join(dirs.stagingDir, 'assets'), { recursive: true });
+  fs.writeFileSync(path.join(dirs.stagingDir, 'assets', 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><!-- staging --></svg>');
+  const analyticsFile = path.join(dirs.baseTmp, 'etc-sdrnow', 'analytics.jsonl');
+  const stagingAnalyticsFile = path.join(dirs.baseTmp, 'etc-sdrnow', 'analytics-staging.jsonl');
+  const ctx = { ...dirs, analyticsFile, stagingAnalyticsFile, clock: Date.parse('2026-10-20T12:00:00Z'), sent: [], prodResponses: [] };
+  ctx.makeTracker = (extra = {}) =>
+    createTracker({
+      analyticsFile,
+      ctaTargets: CTA,
+      alertRecipients: ['jcm@sdrnow.fr', 'copie@example.fr'],
+      sendEmail: async (message) => {
+        ctx.sent.push(message);
+      },
+      now: () => ctx.clock,
+      debounceMs: 40,
+      ...trackerOptions,
+      ...extra,
+    });
+  ctx.tracker = ctx.makeTracker();
+  // Staging test visits: separate log, emails disabled (sendEmail still wired to ctx.sent to prove it)
+  ctx.stagingTracker = ctx.makeTracker({ analyticsFile: stagingAnalyticsFile, emailsDisabled: true });
+  ctx.makeHandler = (tracker, stagingTracker = ctx.stagingTracker) =>
+    createRequestHandler({
+      stagingDir: dirs.stagingDir,
+      prodDir: dirs.prodDir,
+      adminUser: 'client,admin',
+      adminPassSha256: TEST_ADMIN_PASS_SHA256,
+      secret: TEST_SECRET,
+      tracker,
+      stagingTracker,
+    });
+  ctx.handler = ctx.makeHandler(ctx.tracker);
+  // Every prod request goes through here: invariant "no Set-Cookie on sdrnow.fr"
+  ctx.prod = async (url, { ip = TEST_IPS[0], ua = IPHONE_UA, headers = {}, ...rest } = {}) => {
+    const res = await mockRequest(ctx.handler, url, {
+      ...rest,
+      headers: { Host: 'sdrnow.fr', 'User-Agent': ua, 'X-Forwarded-For': ip, ...headers },
+    });
+    assert.equal(res.headers['set-cookie'], undefined, `Set-Cookie on prod ${url}`);
+    assert.equal(res.headers['www-authenticate'], undefined, `WWW-Authenticate on prod ${url}`);
+    ctx.prodResponses.push(res);
+    return res;
+  };
+  ctx.health = (body, opts = {}) => ctx.prod('/health', { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body), ...opts });
+  // Staging request: auth = 'admin' | 'client' | null, preview = token sent as the preview cookie
+  ctx.staging = (url, { ip = TEST_IPS[0], ua = IPHONE_UA, auth = 'admin', preview = null, headers = {}, ...rest } = {}) => {
+    const h = { Host: 'staging.sdrnow.fr', 'User-Agent': ua, 'X-Forwarded-For': ip };
+    if (auth) h.Authorization = `Basic ${Buffer.from(`${auth}:${TEST_ADMIN_PASS}`).toString('base64')}`;
+    if (preview) h.Cookie = `staging_preview=${preview}`;
+    return mockRequest(ctx.handler, url, { ...rest, headers: { ...h, ...headers } });
+  };
+  // Production stats request (Basic Auth expected, so not through ctx.prod)
+  ctx.prodStats = (url, { ip = TEST_IPS[0], headers = {}, ...rest } = {}) =>
+    mockRequest(ctx.handler, url, { ...rest, headers: { Host: 'sdrnow.fr', 'User-Agent': MAC_UA, 'X-Forwarded-For': ip, ...headers } });
+  const readLog = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  ctx.events = () => readLog(analyticsFile);
+  ctx.stagingEvents = () => readLog(stagingAnalyticsFile);
+  ctx.cleanup = () => {
+    ctx.tracker.stopTimers();
+    ctx.stagingTracker.stopTimers();
+    // Invariant: no raw IP is ever written to either log
+    for (const file of [analyticsFile, stagingAnalyticsFile]) {
+      if (!fs.existsSync(file)) continue;
+      const raw = fs.readFileSync(file, 'utf8');
+      for (const ip of TEST_IPS) assert.ok(!raw.includes(ip), `raw IP ${ip} leaked into ${path.basename(file)}`);
+    }
+    cleanupDirs(dirs.baseTmp);
+  };
+  return ctx;
+}
+
+const adminHeaders = () => ({ Authorization: `Basic ${Buffer.from(`${TEST_ADMIN_USER}:${TEST_ADMIN_PASS}`).toString('base64')}` });
+
+test('tracking helpers: UA classification, families, CTA table, recipients, attribute escaping', () => {
+  assert.equal(classifyUa(LINKEDIN_BOT_UA), 'bot');
+  assert.equal(classifyUa('Mozilla/5.0 (compatible; SafeLinks)'), 'bot');
+  assert.equal(classifyUa(''), 'bot');
+  assert.equal(classifyUa(IPHONE_UA), 'human');
+  assert.equal(uaFamily(IPHONE_UA), 'iPhone (Safari)');
+  assert.equal(uaFamily(MAC_UA), 'Mac (Chrome)');
+  assert.equal(uaFamily(LINKEDIN_BOT_UA), 'Robot (LinkedInBot)');
+  const targets = getCtaTargets({ CTA_TARGET_STARTER: 'https://pay.example/starter', CTA_TARGET_HERO: '', CTA_TARGET_PAIEMENT_PRO: 'https://pay.example/pro' });
+  assert.equal(targets.starter, 'https://pay.example/starter');
+  assert.equal(targets.hero, 'https://calendly.com/jc-maleysson/30min');
+  assert.equal(targets.strategy, 'https://calendly.com/jc-maleysson/30min');
+  assert.equal(targets['paiement-pro'], 'https://pay.example/pro');
+  assert.deepEqual(parseRecipients('jcm@sdrnow.fr, copie@domaine.fr,,bad'), ['jcm@sdrnow.fr', 'copie@domaine.fr']);
+  assert.equal(escapeHtmlAttr(`"><img src=x onerror='1'>`), '&quot;&gt;&lt;img src=x onerror=&#39;1&#39;&gt;');
+});
+
+test('tracking: prospect link /pour/<slug> serves the FR home, noindex, logs a tier-1 pageview; bad slug -> 404', async () => {
+  const ctx = setupTracking();
+  try {
+    const res = await ctx.prod('/pour/acme');
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers['x-robots-tag'], 'noindex, nofollow');
+    assert.equal(res.body, fs.readFileSync(path.join(ctx.prodDir, 'index.html'), 'utf8'));
+    const [ev] = ctx.events();
+    assert.equal(ev.event, 'pageview');
+    assert.equal(ev.slug, 'acme');
+    assert.equal(ev.tier, 1);
+    assert.equal(ev.lang, 'fr');
+    assert.equal(ev.ua_family, 'iPhone (Safari)');
+    assert.match(ev.anon_id, /^[0-9a-f]{8}$/);
+    assert.equal(ev.date, '2026-10-20');
+    for (const k of ['ts', 'date', 'anon_id', 'slug', 'tier', 'event', 'target', 'duration', 'lang', 'referer', 'ua_family']) {
+      assert.ok(k in ev, `missing field ${k}`);
+    }
+
+    assert.equal((await ctx.prod('/offre/acme')).statusCode, 200);
+    for (const bad of ['/pour/a', '/pour/acme.x', `/pour/${'x'.repeat(65)}`, '/pour/%E0%A4%A', '/wp-admin', '/login', '/.env', '/acme']) {
+      const r = await ctx.prod(bad);
+      assert.equal(r.statusCode, 404, bad);
+    }
+    // HEAD is never logged
+    await ctx.prod('/pour/acme', { method: 'HEAD' });
+    assert.equal(ctx.events().length, 2);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: EN prospect links /en/for/<slug> and /en/offer/<slug> serve en/index.html with lang en', async () => {
+  const ctx = setupTracking();
+  try {
+    for (const url of ['/en/for/acme', '/en/offer/acme']) {
+      const res = await ctx.prod(url);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body, fs.readFileSync(path.join(ctx.prodDir, 'en', 'index.html'), 'utf8'));
+      assert.equal(res.headers['x-robots-tag'], 'noindex, nofollow');
+    }
+    assert.deepEqual(ctx.events().map((e) => [e.lang, e.slug]), [['en', 'acme'], ['en', 'acme']]);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: LinkedInBot preview stays tier 1, arms no timer and is counted as a bot', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme', { ua: LINKEDIN_BOT_UA, ip: TEST_IPS[1] });
+    await ctx.prod('/assets/logo.svg', { ua: LINKEDIN_BOT_UA, ip: TEST_IPS[1] });
+    assert.ok(ctx.events().every((e) => e.tier === 1));
+    assert.equal(ctx.tracker.hasPendingAlert('acme'), false);
+    await sleep(80);
+    await ctx.tracker.whenIdle();
+    assert.equal(ctx.sent.length, 0);
+    const stats = ctx.tracker.stats('today');
+    assert.equal(stats.bots, 1);
+    assert.equal(stats.prospects.length, 0);
+    assert.equal(stats.humans, 0);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: HTML + witness logo (Adblock) -> tier 2, radar row, timer armed; logo revalidates with ETag', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    assert.equal(ctx.tracker.hasPendingAlert('acme'), false);
+    const logo = await ctx.prod('/assets/logo.svg');
+    assert.equal(logo.statusCode, 200);
+    assert.equal(logo.headers['cache-control'], 'no-cache');
+    assert.ok(logo.headers.etag);
+    const render = ctx.events().find((e) => e.event === 'render');
+    assert.equal(render.tier, 2);
+    assert.equal(render.slug, 'acme');
+    assert.equal(ctx.tracker.hasPendingAlert('acme'), true);
+
+    // Revisit J+N with a cached logo: 304 still proves the render
+    const again = await ctx.prod('/assets/logo.svg', { headers: { 'If-None-Match': logo.headers.etag } });
+    assert.equal(again.statusCode, 304);
+
+    const stats = ctx.tracker.stats('today');
+    assert.equal(stats.prospects.length, 1);
+    assert.equal(stats.prospects[0].adblockOnly, true);
+    assert.equal(stats.prospects[0].signals.hasTelemetry, false);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: POST /health -> tier 3 and 204; 413 / 429 / 400 guards', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    const ok = await ctx.health({ e: 'init', p: '/pour/acme', d: 0, t: '' });
+    assert.equal(ok.statusCode, 204);
+    const init = ctx.events().find((e) => e.event === 'init');
+    assert.equal(init.tier, 3);
+    assert.equal(init.slug, 'acme');
+
+    assert.equal((await ctx.health(JSON.stringify({ e: 'ping', t: 'x'.repeat(600) }))).statusCode, 413);
+    assert.equal((await ctx.health('{not json')).statusCode, 400);
+    assert.equal((await ctx.health({ e: 'steal_cookies' })).statusCode, 400);
+    assert.equal((await ctx.health('[]')).statusCode, 400);
+    assert.equal((await ctx.prod('/health')).statusCode, 405);
+
+    // Rate limit: 30 POST/min/IP (5 already used above, the 405 GET does not count)
+    const statuses = [];
+    for (let i = 0; i < 30; i++) statuses.push((await ctx.health({ e: 'ping', d: 1 })).statusCode);
+    assert.equal(statuses.filter((s) => s === 204).length, 25);
+    assert.equal(statuses[statuses.length - 1], 429);
+    // Another IP is not affected; a new minute resets the window
+    assert.equal((await ctx.health({ e: 'ping', d: 1 }, { ip: TEST_IPS[2] })).statusCode, 204);
+    ctx.clock += 61000;
+    assert.equal((await ctx.health({ e: 'ping', d: 1 })).statusCode, 204);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: each event re-arms the 120 s debounce -> one single email per recipient', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    await ctx.health({ e: 'init', p: '/pour/acme' });
+    for (const body of [{ e: 'pricing_view' }, { e: 'copy', t: 'starter' }, { e: 'ping', d: 45 }]) {
+      await sleep(25); // < debounce (40 ms) each time, > debounce in total
+      await ctx.health(body);
+    }
+    assert.equal(ctx.sent.length, 0);
+    await sleep(90);
+    await ctx.tracker.whenIdle();
+    assert.equal(ctx.sent.length, 2);
+    assert.deepEqual(ctx.sent.map((m) => m.to).sort(), ['copie@example.fr', 'jcm@sdrnow.fr']);
+    assert.equal(ctx.sent[0].subject, '🔥 [SDRnow] acme vient de consulter votre offre (1 appareil • Copie tarif Starter)');
+    assert.ok(!/\d+\.\d+\.\d+\.\d+/.test(ctx.sent[0].html), 'no IP in the email');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: CTA routes log cta_click and 302 to the per-offer target, no-store; unknown offer -> 404', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    const fr = await ctx.prod('/rdv/starter');
+    assert.equal(fr.statusCode, 302);
+    assert.equal(fr.headers.location, CTA.starter);
+    assert.equal(fr.headers['cache-control'], 'no-store');
+    const en = await ctx.prod('/en/book/starter');
+    assert.equal(en.headers.location, CTA.starter);
+    assert.equal((await ctx.prod('/rdv/decouverte')).headers.location, CTA.hero);
+    assert.equal((await ctx.prod('/en/book/discovery')).headers.location, CTA.hero);
+    assert.equal((await ctx.prod('/rdv/strategy')).headers.location, CTA.strategy);
+    assert.equal((await ctx.prod('/rdv/inconnue')).statusCode, 404);
+    const clicks = ctx.events().filter((e) => e.event === 'cta_click');
+    assert.deepEqual(clicks.map((e) => [e.target, e.lang, e.slug]), [
+      ['starter', 'fr', 'acme'], ['starter', 'en', 'acme'], ['hero', 'fr', 'acme'], ['hero', 'en', 'acme'], ['strategy', 'fr', 'acme'],
+    ]);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: the same anon_id opening /en afterwards stays attached to the prospect (RAM map of the day)', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    const res = await ctx.prod('/en');
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers['x-robots-tag'], undefined);
+    await ctx.prod('/mentions-legales');
+    const [first, second, third] = ctx.events();
+    assert.equal(second.anon_id, first.anon_id);
+    assert.equal(second.slug, 'acme');
+    assert.equal(second.lang, 'en');
+    assert.equal(third.slug, 'acme');
+    // A different device on the generic URL stays anonymous
+    await ctx.prod('/', { ip: TEST_IPS[3], ua: MAC_UA });
+    assert.equal(ctx.events()[3].slug, null);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: hot prospect alert after inactivity (2 devices + Starter click), one TEM send per recipient', async () => {
+  const ctx = setupTracking();
+  try {
+    // LinkedIn preview robot first: filtered
+    await ctx.prod('/pour/acme', { ua: LINKEDIN_BOT_UA, ip: TEST_IPS[1] });
+    // Prospect on iPhone with JS
+    await ctx.prod('/pour/acme', { headers: { Referer: 'https://www.linkedin.com/' } });
+    await ctx.prod('/assets/logo.svg');
+    await ctx.health({ e: 'init', p: '/pour/acme' });
+    await ctx.health({ e: 'pricing_view', p: '/pour/acme' });
+    await ctx.health({ e: 'copy', p: '/pour/acme', t: 'starter' });
+    // Forwarded to the CEO on a Mac, under Adblock
+    const mac = { ip: TEST_IPS[2], ua: MAC_UA };
+    await ctx.prod('/pour/acme', mac);
+    await ctx.prod('/assets/logo.svg', mac);
+    await ctx.prod('/mentions-legales', mac);
+    await ctx.prod('/rdv/starter', mac);
+    await sleep(90);
+    await ctx.tracker.whenIdle();
+
+    assert.equal(ctx.sent.length, 2);
+    for (const m of ctx.sent) {
+      assert.equal(m.subject, '🔥 [SDRnow] acme vient de consulter votre offre (2 appareils • Clic RDV Starter)');
+      assert.match(m.html, /2e appareil : Mac \(Chrome\)/);
+      assert.match(m.html, /Mentions légales/);
+      assert.match(m.html, /href="https:\/\/sdrnow\.fr\/stats"/, 'STATS_URL defaults to the production stats');
+      assert.ok(!m.html.includes('LinkedInBot'), 'bot events are not in the summary');
+    }
+    assert.notEqual(ctx.sent[0].to, ctx.sent[1].to);
+
+    const stats = ctx.tracker.stats('today');
+    assert.equal(stats.bots, 1);
+    const row = stats.prospects[0];
+    assert.equal(row.slug, 'acme');
+    assert.equal(row.devices, 2);
+    assert.deepEqual(row.signals.ctas, ['starter']);
+    assert.equal(row.signals.legal, true);
+    assert.equal(row.origin, 'LinkedIn');
+    assert.equal(row.revisit, false, 'two devices a few minutes apart is a share, not a revisit');
+    ctx.clock += 31 * 60 * 1000;
+    await ctx.prod('/pour/acme');
+    assert.equal(ctx.tracker.stats('today').prospects[0].revisit, true);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: TEM failure is logged with [TEM], no retry, server keeps serving', async () => {
+  let calls = 0;
+  const ctx = setupTracking({
+    sendEmail: async () => {
+      calls += 1;
+      throw new Error('HTTP 500 boom');
+    },
+  });
+  const errors = [];
+  const original = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  try {
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    await sleep(90);
+    await ctx.tracker.whenIdle();
+    assert.equal(calls, 2); // one attempt per recipient, no retry
+    assert.ok(errors.some((e) => e.startsWith('[TEM]') && e.includes('boom')));
+    assert.equal((await ctx.prod('/pour/acme')).statusCode, 200);
+  } finally {
+    console.error = original;
+    ctx.cleanup();
+  }
+});
+
+test('tracking: sendTemEmail calls the Scaleway TEM HTTPS API with the dedicated key, one recipient', async () => {
+  const calls = [];
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: true, status: 200, text: async () => '' };
+  };
+  await sendTemEmail(
+    { to: 'jcm@sdrnow.fr', subject: 'S', html: '<p>h</p>', text: 't' },
+    { secretKey: 'tem-key', projectId: 'proj-1', fetch: fakeFetch, from: 'alertes@sdrnow.fr' }
+  );
+  assert.equal(calls[0].url, 'https://api.scaleway.com/transactional-email/v1alpha1/regions/fr-par/emails');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].init.headers['X-Auth-Token'], 'tem-key');
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.to, [{ email: 'jcm@sdrnow.fr' }]);
+  assert.equal(body.project_id, 'proj-1');
+  assert.equal(body.from.email, 'alertes@sdrnow.fr');
+
+  await assert.rejects(
+    sendTemEmail({ to: 'a@b.fr', subject: 'S' }, { secretKey: 'k', projectId: 'p', fetch: async () => ({ ok: false, status: 403, text: async () => 'denied' }) }),
+    /HTTP 403/
+  );
+  await assert.rejects(sendTemEmail({ to: 'a@b.fr' }, { secretKey: '', projectId: 'p', fetch: fakeFetch }), /TEM_SECRET_KEY/);
+});
+
+test('tracking: midnight rotation sends the anonymous digest only when >= 1 human visited; anon_id rotates', async () => {
+  const ctx = setupTracking();
+  try {
+    // Quiet day: only a robot
+    await ctx.prod('/', { ua: LINKEDIN_BOT_UA, ip: TEST_IPS[1] });
+    ctx.clock = Date.parse('2026-10-20T22:00:30Z'); // 00:00:30 Paris on Oct 21 (CEST)
+    assert.equal(ctx.tracker.rotateIfNeeded(), true);
+    await ctx.tracker.whenIdle();
+    assert.equal(ctx.sent.length, 0, 'no TEM call when 0 human visitor');
+
+    // Oct 21: an anonymous human with telemetry clicks the Hero CTA
+    await ctx.prod('/', { headers: { Referer: 'https://www.google.com/' } });
+    const anonDay1 = ctx.events().at(-1).anon_id;
+    await ctx.prod('/assets/logo.svg');
+    await ctx.health({ e: 'init', p: '/' });
+    await ctx.health({ e: 'pricing_view', p: '/' });
+    await ctx.prod('/rdv/decouverte');
+    ctx.clock = Date.parse('2026-10-21T22:00:05Z');
+    await ctx.prod('/');
+    await ctx.tracker.whenIdle();
+    assert.notEqual(ctx.events().at(-1).anon_id, anonDay1, 'daily secret rotated');
+    assert.equal(ctx.sent.length, 2);
+    assert.equal(ctx.sent[0].subject, '📊 [SDRnow] Bilan du 21 oct. : 1 visiteur anonyme (1 clic RDV • 1 a lu les tarifs)');
+    assert.match(ctx.sent[0].html, /Moteurs de recherche/);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: staging /stats is admin only (401 / 403), unknown period falls back to today, empty state', async () => {
+  const ctx = setupTracking();
+  try {
+    const anon = await ctx.staging('/stats', { auth: null });
+    assert.equal(anon.statusCode, 401);
+    const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    const readOnly = await ctx.staging(`/stats?preview=${token}`, { auth: null });
+    assert.equal(readOnly.statusCode, 403);
+
+    const empty = await ctx.staging('/stats?period=nimporte');
+    assert.equal(empty.statusCode, 200);
+    assert.match(empty.headers['content-type'], /text\/html/);
+    assert.equal(empty.headers['x-robots-tag'], 'noindex, nofollow');
+    assert.match(empty.body, /href="\/stats\?period=today" aria-current="page"/);
+    assert.match(empty.body, /Aucun lien prospect visité/);
+    assert.match(empty.body, /Bots &amp; Scanners écartés/);
+    assert.ok(!/<script[^>]+src=|<link[^>]+stylesheet|fonts\.googleapis/.test(empty.body), 'no third-party resource');
+    assert.equal(ctx.stagingEvents().length, 0, '/stats is never counted as a visit');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats prod: sdrnow.fr/stats?period=7d (admin) shows the production log, noindex, no-store, not counted as a visit', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    await ctx.prod('/pour/acme', { ip: TEST_IPS[2], ua: MAC_UA });
+    await ctx.prod('/assets/logo.svg', { ip: TEST_IPS[2], ua: MAC_UA });
+    const before = ctx.events().length;
+    for (const host of ['sdrnow.fr', 'www.sdrnow.fr']) {
+      const page = await ctx.prodStats('/stats?period=7d', { headers: { Host: host, ...adminHeaders() } });
+      assert.equal(page.statusCode, 200, host);
+      assert.equal(page.headers['x-robots-tag'], 'noindex, nofollow');
+      assert.equal(page.headers['cache-control'], 'no-store');
+      assert.equal(page.headers['set-cookie'], undefined);
+      assert.match(page.body, /Données affichées : Prod — sdrnow\.fr/);
+      assert.match(page.body, /href="https:\/\/staging\.sdrnow\.fr\/stats">Voir Staging — visites de test/);
+      assert.match(page.body, /href="\/stats\?period=7d" aria-current="page"/);
+      assert.match(page.body, /acme/);
+      assert.match(page.body, /🔥 2 appareils \(Partage interne\)/);
+      assert.match(page.body, /🛡 Adblock \/ Sans JS/);
+      assert.match(page.body, /N\/A \(Sans JS\)/);
+      assert.ok(!page.body.includes('👤'), 'production stays anonymous: no tester');
+    }
+    assert.equal((await ctx.prodStats('/stats/', { headers: adminHeaders() })).statusCode, 200);
+    assert.equal((await ctx.prodStats('/stats', { method: 'HEAD', headers: adminHeaders() })).statusCode, 200);
+    assert.equal(ctx.events().length, before, 'stats requests are never logged as visits');
+    assert.ok(ctx.events().every((e) => !('tester' in e)), 'no tester field in analytics.jsonl');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats prod: without / with bad credentials -> 401 + WWW-Authenticate; 11th failure per minute and IP -> 429', async () => {
+  const ctx = setupTracking();
+  try {
+    const bare = await ctx.prodStats('/stats');
+    assert.equal(bare.statusCode, 401);
+    assert.match(bare.headers['www-authenticate'], /^Basic realm=/);
+    assert.equal(bare.headers['x-robots-tag'], 'noindex, nofollow');
+    assert.equal(bare.headers['cache-control'], 'no-store');
+    assert.ok(!bare.body.includes('acme'));
+    const bad = { Authorization: `Basic ${Buffer.from('admin:wrong').toString('base64')}` };
+    const statuses = [];
+    for (let i = 0; i < 11; i++) statuses.push((await ctx.prodStats('/stats', { headers: bad })).statusCode);
+    assert.deepEqual(statuses, [...Array(10).fill(401), 429]);
+    // Locked for the rest of the minute, even with the right password; other IPs unaffected
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 429);
+    assert.equal((await ctx.prodStats('/api/stats/export', { headers: bad })).statusCode, 429);
+    assert.equal((await ctx.prodStats('/stats', { ip: TEST_IPS[1], headers: adminHeaders() })).statusCode, 200);
+    ctx.clock += 61000;
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 200);
+    assert.equal(ctx.events().length, 0, 'auth attempts are not visits');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats prod: the failed-login window is anchored on the first failure (no 20 guesses across a window boundary)', async () => {
+  const ctx = setupTracking();
+  try {
+    const bad = { Authorization: `Basic ${Buffer.from('admin:wrong').toString('base64')}` };
+    // A request without credentials (or a successful one) at t0 must not open the window
+    assert.equal((await ctx.prodStats('/stats')).statusCode, 401);
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 200);
+    ctx.clock += 59000;
+    for (let i = 0; i < 10; i++) assert.equal((await ctx.prodStats('/stats', { headers: bad })).statusCode, 401);
+    ctx.clock += 1100; // past t0 + 60 s, but 1.1 s after the first failure
+    assert.equal((await ctx.prodStats('/stats', { headers: bad })).statusCode, 429);
+    // The window expires 60 s after the first failure
+    ctx.clock += 59000;
+    assert.equal((await ctx.prodStats('/stats', { headers: adminHeaders() })).statusCode, 200);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('staging log defaults next to an injected analyticsFile, never the real /etc/sdrnow file', async () => {
+  const { baseTmp, stagingDir, prodDir } = setupTestDirs();
+  const analyticsFile = path.join(baseTmp, 'logs', 'analytics.jsonl');
+  try {
+    const handler = createRequestHandler({
+      stagingDir, prodDir, adminUser: TEST_ADMIN_USER, adminPassSha256: TEST_ADMIN_PASS_SHA256, secret: TEST_SECRET, analyticsFile,
+    });
+    const res = await mockRequest(handler, '/', { headers: { Host: 'staging.sdrnow.fr', 'User-Agent': IPHONE_UA, ...adminHeaders() } });
+    assert.equal(res.statusCode, 200);
+    const sibling = path.join(baseTmp, 'logs', 'analytics-staging.jsonl');
+    assert.equal(JSON.parse(fs.readFileSync(sibling, 'utf8').trim()).tester, 'admin');
+    assert.equal(fs.existsSync(analyticsFile), false);
+  } finally {
+    cleanupDirs(baseTmp);
+  }
+});
+
+test('export prod: sdrnow.fr/api/stats/export streams analytics.jsonl as an attachment (admin), 401 without auth', async () => {
+  const ctx = setupTracking();
+  try {
+    const missing = await ctx.prodStats('/api/stats/export', { headers: adminHeaders() });
+    assert.equal(missing.statusCode, 200);
+    assert.equal(missing.body, '');
+    await ctx.prod('/pour/acme');
+    const res = await ctx.prodStats('/api/stats/export', { headers: adminHeaders() });
+    assert.equal(res.statusCode, 200);
+    assert.match(res.headers['content-disposition'], /^attachment; filename="analytics\.jsonl"$/);
+    assert.equal(res.headers['x-robots-tag'], 'noindex, nofollow');
+    assert.equal(res.body, fs.readFileSync(ctx.analyticsFile, 'utf8'));
+    const anon = await ctx.prodStats('/api/stats/export');
+    assert.equal(anon.statusCode, 401);
+    assert.equal(anon.body, '401 Unauthorized');
+    // Staging export only ever returns the staging log
+    const staging = await ctx.staging('/api/stats/export');
+    assert.equal(staging.statusCode, 200);
+    assert.match(staging.headers['content-disposition'], /filename="analytics-staging\.jsonl"/);
+    assert.equal(staging.body, '');
+    const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    assert.equal((await ctx.staging(`/api/stats/export?preview=${token}`, { auth: null })).statusCode, 403);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: after a restart, /stats figures are rebuilt from analytics.jsonl', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    await ctx.prod('/', { ip: TEST_IPS[3], ua: MAC_UA });
+    await ctx.prod('/assets/logo.svg', { ip: TEST_IPS[3], ua: MAC_UA });
+    ctx.tracker.stopTimers();
+    const restarted = ctx.makeTracker();
+    ctx.handler = ctx.makeHandler(restarted);
+    const page = await ctx.prodStats('/stats', { headers: adminHeaders() });
+    assert.match(page.body, /acme/);
+    const stats = restarted.stats('today');
+    assert.equal(stats.prospects.length, 1);
+    assert.equal(stats.humans, 1);
+    assert.equal(stats.adblock, 1);
+    restarted.stopTimers();
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('staging test visit: admin opens /pour/acme + logo + POST /health -> analytics-staging.jsonl, tier 3, tester admin; nothing in prod', async () => {
+  const ctx = setupTracking();
+  try {
+    const page = await ctx.staging('/pour/acme');
+    assert.equal(page.statusCode, 200);
+    assert.equal(page.headers['x-robots-tag'], 'noindex, nofollow');
+    assert.ok(page.body.includes('<script src="/__editor.js"></script>'), 'same staging page as /, editor included for admin');
+    const logo = await ctx.staging('/assets/logo.svg');
+    assert.equal(logo.statusCode, 200);
+    assert.equal(logo.headers['cache-control'], 'no-cache');
+    assert.ok(logo.headers.etag);
+    assert.equal((await ctx.staging('/assets/logo.svg', { headers: { 'If-None-Match': logo.headers.etag } })).statusCode, 304);
+    const health = await ctx.staging('/health', { method: 'POST', body: { e: 'init', p: '/pour/acme' } });
+    assert.equal(health.statusCode, 204);
+    assert.equal((await ctx.staging('/health', { method: 'POST', body: { e: 'nope' } })).statusCode, 400);
+
+    const evs = ctx.stagingEvents();
+    assert.deepEqual(evs.map((e) => e.event), ['pageview', 'render', 'init']);
+    assert.ok(evs.every((e) => e.slug === 'acme' && e.tester === 'admin'));
+    assert.equal(evs.at(-1).tier, 3);
+    assert.equal(fs.existsSync(ctx.analyticsFile), false, 'nothing in analytics.jsonl');
+
+    // Another Basic Auth user is recorded under its own name; HTML pages are logged too
+    await ctx.staging('/en/', { auth: 'client', ip: TEST_IPS[1], ua: MAC_UA });
+    const last = ctx.stagingEvents().at(-1);
+    assert.deepEqual([last.event, last.target, last.tester, last.lang], ['pageview', '/en/', 'client', 'en']);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('staging preview test: reviewer (preview cookie) opens / then /rdv/starter -> tester preview, 302 to the target', async () => {
+  const ctx = setupTracking();
+  try {
+    const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    const home = await ctx.staging('/', { auth: null, preview: token });
+    assert.equal(home.statusCode, 200);
+    assert.ok(!home.body.includes('/__editor.js'));
+    const cta = await ctx.staging('/rdv/starter', { auth: null, preview: token });
+    assert.equal(cta.statusCode, 302);
+    assert.equal(cta.headers.location, CTA.starter);
+    assert.equal(cta.headers['cache-control'], 'no-store');
+    assert.deepEqual(ctx.stagingEvents().map((e) => [e.event, e.target, e.tester]), [
+      ['pageview', '/', 'preview'],
+      ['cta_click', 'starter', 'preview'],
+    ]);
+    assert.equal(fs.existsSync(ctx.analyticsFile), false);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('staging unauthenticated: POST /health, GET /rdv/starter, prospect link and logo -> 401, nothing logged', async () => {
+  const ctx = setupTracking();
+  try {
+    for (const [url, opts] of [
+      ['/health', { method: 'POST', body: { e: 'init' } }],
+      ['/rdv/starter', {}],
+      ['/en/book/discovery', {}],
+      ['/pour/acme', {}],
+      ['/assets/logo.svg', {}],
+      ['/', {}],
+    ]) {
+      const res = await ctx.staging(url, { auth: null, ...opts });
+      assert.equal(res.statusCode, 401, url);
+      assert.match(res.headers['www-authenticate'], /^Basic realm=/);
+    }
+    const bad = await ctx.staging('/rdv/starter', { auth: null, headers: { Authorization: `Basic ${Buffer.from('admin:nope').toString('base64')}` } });
+    assert.equal(bad.statusCode, 401);
+    assert.equal(fs.existsSync(ctx.stagingAnalyticsFile), false);
+    assert.equal(fs.existsSync(ctx.analyticsFile), false);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats staging: staging.sdrnow.fr/stats shows only the staging test log with testers; each /stats shows only its own site', async () => {
+  const ctx = setupTracking();
+  try {
+    // Staging: admin tests a prospect link, a reviewer and an admin browse the home page
+    await ctx.staging('/pour/staging-only');
+    await ctx.staging('/assets/logo.svg');
+    const token = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    await ctx.staging('/', { auth: null, preview: token, ip: TEST_IPS[1] });
+    await ctx.staging('/assets/logo.svg', { auth: null, preview: token, ip: TEST_IPS[1] });
+    await ctx.staging('/', { ip: TEST_IPS[2], ua: MAC_UA });
+    await ctx.staging('/assets/logo.svg', { ip: TEST_IPS[2], ua: MAC_UA });
+    // Prod: a real prospect
+    await ctx.prod('/pour/prod-only');
+    await ctx.prod('/assets/logo.svg');
+
+    const staging = await ctx.staging('/stats');
+    assert.equal(staging.statusCode, 200);
+    assert.equal(staging.headers['cache-control'], 'no-store');
+    assert.match(staging.body, /Données affichées : Staging — visites de test/);
+    assert.match(staging.body, /href="https:\/\/sdrnow\.fr\/stats">Voir Prod — sdrnow\.fr/);
+    assert.match(staging.body, /staging-only/);
+    assert.ok(!staging.body.includes('prod-only'), 'no production visit on the staging page');
+    assert.match(staging.body, /👤 admin<\/span>/, 'tester shown in the radar');
+    assert.match(staging.body, /👤 admin ×1 • preview ×1/, 'testers under the visitors KPI');
+    assert.match(staging.body, /https:\/\/staging\.sdrnow\.fr\/pour\//, 'link generator targets staging');
+
+    const prod = await ctx.prodStats('/stats', { headers: adminHeaders() });
+    assert.match(prod.body, /prod-only/);
+    assert.ok(!prod.body.includes('staging-only'), 'no staging visit on the production page');
+    assert.ok(!prod.body.includes('👤'));
+    assert.match(prod.body, /https:\/\/sdrnow\.fr\/pour\//);
+
+    const token2 = computePreviewToken(ctx.stagingDir, TEST_SECRET);
+    assert.equal((await ctx.staging(`/stats?preview=${token2}`, { auth: null })).statusCode, 403);
+    assert.equal((await ctx.staging('/stats', { auth: null })).statusCode, 401);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('no email from staging: 120 s idle after a test visit on /pour/acme, and the midnight rotation, never call sendEmail', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.staging('/pour/acme');
+    await ctx.staging('/assets/logo.svg');
+    await ctx.staging('/health', { method: 'POST', body: { e: 'init', p: '/pour/acme' } });
+    await ctx.staging('/rdv/starter');
+    assert.equal(ctx.stagingTracker.hasPendingAlert('acme'), false, 'no alert timer armed on staging');
+    await sleep(90); // > debounce (40 ms, stands for 120 s)
+    ctx.stagingTracker.flushAlerts();
+    ctx.clock = Date.parse('2026-10-20T22:00:30Z'); // midnight Paris: digest of the day
+    assert.equal(ctx.stagingTracker.rotateIfNeeded(), true);
+    await ctx.stagingTracker.whenIdle();
+    await ctx.tracker.whenIdle();
+    assert.equal(ctx.sent.length, 0, 'sendEmail never called by the staging tracker');
+    assert.ok(ctx.stagingEvents().length >= 4);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: prod host is public static (no staging gate, no editor), and no response sets a cookie', async () => {
+  const ctx = setupTracking();
+  try {
+    const home = await ctx.prod('/', { headers: adminHeaders() });
+    assert.equal(home.statusCode, 200);
+    assert.ok(!home.body.includes('/__editor.js'));
+    assert.equal((await ctx.prod('/en/legal-notice/')).statusCode, 200);
+    assert.equal((await ctx.prod('/translations.json')).statusCode, 200);
+    assert.equal((await ctx.prod('/api/translations')).statusCode, 404);
+    assert.equal((await ctx.prod('/api/staging', { method: 'POST', body: {} })).statusCode, 405);
+    assert.equal((await ctx.prod('/../staging/index.html')).statusCode, 404);
+    const www = await mockRequest(ctx.handler, '/pour/acme', { headers: { Host: 'www.sdrnow.fr:443', 'User-Agent': IPHONE_UA } });
+    assert.equal(www.statusCode, 200);
+    assert.equal(www.headers['set-cookie'], undefined);
+    assert.ok(ctx.prodResponses.length > 3);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: beacon in Layout.astro is < 1.5 KB, storage-free, and emits the CAP-4 events', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'src', 'layouts', 'Layout.astro'), 'utf8');
+  const script = source.match(/<script is:inline>([\s\S]*?)<\/script>/)[1];
+  assert.ok(Buffer.byteLength(script) < 1536, `beacon is ${Buffer.byteLength(script)} bytes`);
+  assert.ok(!/cookie|localStorage|sessionStorage|indexedDB/i.test(script));
+
+  const sent = [];
+  const listeners = {};
+  let now = 1000;
+  const el = (attrs, parents = []) => ({
+    nodeType: 1,
+    attrs,
+    getAttribute: (k) => attrs[k],
+    hasAttribute: (k) => k in attrs,
+    closest(sel) {
+      const chain = [this, ...parents];
+      const match = (n) => {
+        if (sel === 'a') return n.attrs.tag === 'a';
+        if (sel === '[data-plan]') return 'data-plan' in n.attrs;
+        if (sel === '[data-track=pricing]') return n.attrs['data-track'] === 'pricing';
+        if (sel.startsWith('a[href^="tel:"]')) return n.attrs.tag === 'a' && /^(tel|mailto):/.test(n.attrs.href || '');
+        return false;
+      };
+      return chain.find(match) || null;
+    },
+  });
+  const pricing = el({ 'data-track': 'pricing' });
+  const starterCard = el({ 'data-plan': 'starter' }, [pricing]);
+  const priceText = { nodeType: 3, parentNode: el({}, [starterCard, pricing]) };
+  const telLink = el({ tag: 'a', href: 'tel:0667902494' });
+  const langLink = el({ tag: 'a', href: '/en', 'data-lang-switch': 'en' });
+  const activeLangLink = el({ tag: 'a', href: '/', 'data-lang-switch': 'fr' });
+  let observerCb;
+  let intervalCb;
+  const document = {
+    documentElement: { lang: 'fr' },
+    visibilityState: 'visible',
+    addEventListener: (type, fn) => { listeners[type] = fn; },
+    querySelector: (sel) => (sel === '[data-track=pricing]' ? pricing : null),
+  };
+  const context = {
+    document,
+    navigator: { sendBeacon: (url, body) => { sent.push([url, JSON.parse(body)]); return true; } },
+    location: { pathname: '/pour/acme' },
+    Date: { now: () => now },
+    addEventListener: (type, fn) => { listeners[`win:${type}`] = fn; },
+    getSelection: () => ({ anchorNode: priceText }),
+    IntersectionObserver: function (cb) { observerCb = cb; this.observe = () => {}; this.disconnect = () => {}; },
+    fetch: () => { throw new Error('fetch should not be used when sendBeacon works'); },
+    setInterval: (fn, ms) => { assert.equal(ms, 60000); intervalCb = fn; },
+    JSON,
+    Math,
+  };
+  context.window = context;
+  vm.runInNewContext(script, context);
+
+  observerCb([{ isIntersecting: true }]);
+  listeners.copy();
+  listeners.click({ target: telLink });
+  listeners.click({ target: langLink });
+  listeners.click({ target: activeLangLink }); // already the page language: no lang_switch
+  listeners['win:beforeprint']();
+  now += 60000;
+  intervalCb(); // still reading: keep-alive ping every 60 s (delta seconds)
+  now += 42000;
+  document.visibilityState = 'hidden';
+  listeners.visibilitychange();
+  listeners['win:pagehide'](); // nothing more visible: no second ping
+
+  assert.ok(sent.every(([url]) => url === '/health'));
+  assert.deepEqual(sent.map(([, b]) => [b.e, b.t, b.d]), [
+    ['init', '', 0],
+    ['pricing_view', '', 0],
+    ['copy', 'starter', 0],
+    ['contact', 'phone', 0],
+    ['lang_switch', 'en', 0],
+    ['print', '', 0],
+    ['ping', '', 60],
+    ['ping', '', 42],
+  ]);
+  assert.ok(sent.every(([, b]) => Buffer.byteLength(JSON.stringify(b)) < 512));
+});
+
+test('tracking: a closing ping after the alert does not send a second, empty email', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    await ctx.health({ e: 'init', p: '/pour/acme' });
+    await sleep(90);
+    await ctx.tracker.whenIdle();
+    assert.equal(ctx.sent.length, 2);
+    await ctx.health({ e: 'ping', p: '/pour/acme', d: 30 });
+    await sleep(90);
+    await ctx.tracker.whenIdle();
+    assert.equal(ctx.sent.length, 2, 'ping-only pending entry is not mailed');
+    assert.equal(ctx.events().at(-1).duration, 30, 'the ping is still logged');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('tracking: daily secret survives a same-day restart (tmpfs file 0600), visitors rebuilt; new secret the next day', async () => {
+  const ctx = setupTracking();
+  const secretFile = path.join(ctx.baseTmp, 'run-sdrnow', 'daily-secret.json');
+  fs.mkdirSync(path.dirname(secretFile), { recursive: true });
+  const trackers = [];
+  const boot = () => {
+    const t = ctx.makeTracker({ secretFile });
+    trackers.push(t);
+    ctx.handler = ctx.makeHandler(t);
+    return t;
+  };
+  try {
+    boot();
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    const before = ctx.events().at(-1);
+    const saved = JSON.parse(fs.readFileSync(secretFile, 'utf8'));
+    assert.equal(saved.date, '2026-10-20');
+    assert.equal(fs.statSync(secretFile).mode & 0o777, 0o600);
+
+    trackers[0].stopTimers();
+    boot(); // service restart, same day
+    await ctx.prod('/en');
+    const after = ctx.events().at(-1);
+    assert.equal(after.anon_id, before.anon_id, 'same device keeps its anon_id after restart');
+    assert.equal(after.slug, 'acme', 'prospect attribution rebuilt from analytics.jsonl');
+    assert.equal(after.tier, 2, 'tier rebuilt from analytics.jsonl');
+    assert.equal(trackers[1].stats('today').prospects[0].devices, 1, 'no false "2 appareils"');
+
+    trackers[1].stopTimers();
+    ctx.clock += 24 * 3600 * 1000;
+    boot(); // next day: stale file ignored and overwritten
+    await ctx.prod('/en');
+    assert.notEqual(ctx.events().at(-1).anon_id, before.anon_id);
+    assert.equal(JSON.parse(fs.readFileSync(secretFile, 'utf8')).date, '2026-10-21');
+    assert.notEqual(JSON.parse(fs.readFileSync(secretFile, 'utf8')).secret, saved.secret);
+  } finally {
+    for (const t of trackers) t.stopTimers();
+    ctx.cleanup();
+  }
+});
+
+test('tracking: without a TEM key, emails stay dormant (no HTTPS call) while tracking keeps working', async () => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), 'tests', 'tmp-dormant-'));
+  const analyticsFile = path.join(dir, 'analytics.jsonl');
+  fs.writeFileSync(analyticsFile, JSON.stringify({
+    ts: '2026-10-20T10:00:00.000Z', date: '2026-10-20', anon_id: 'a1b2c3d4', slug: null, tier: 3,
+    event: 'init', target: null, duration: null, lang: 'fr', referer: null, ua_family: 'Mac (Chrome)',
+  }) + '\n');
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return { ok: true }; };
+  try {
+    // No sendEmail option and no TEM_SECRET_KEY in the test environment
+    const tracker = createTracker({ analyticsFile, ctaTargets: CTA, alertRecipients: ['jcm@sdrnow.fr'], now: () => Date.parse('2026-10-20T12:00:00Z') });
+    assert.equal(await tracker.sendDigest('2026-10-20'), true, 'the day had a human visitor');
+    await tracker.whenIdle();
+    assert.equal(calls, 0, 'no TEM API call while emails are dormant');
+    tracker.stopTimers();
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

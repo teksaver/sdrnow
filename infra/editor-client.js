@@ -457,6 +457,13 @@
       <button id="sdrnow-btn-reset" style="background: transparent; color: ${TOKENS.chromeMuted}; border: 1px solid transparent; border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 500; cursor: pointer; transition: color 0.15s;">
         ↺ Réinitialiser depuis la Prod
       </button>
+
+      <div style="width: 1px; height: 18px; background: ${TOKENS.chromeBorder};"></div>
+
+      <!-- Admin navigation: Radar & Stats dashboard -->
+      <a id="sdrnow-link-stats" href="/stats" style="background: ${TOKENS.chromeSurface}; color: ${TOKENS.chromeText}; border: 1px solid ${TOKENS.chromeBorder}; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 500; text-decoration: none; white-space: nowrap;">
+        📡 Radar &amp; Stats
+      </a>
     `;
 
     document.body.appendChild(pill);

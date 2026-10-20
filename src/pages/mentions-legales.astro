@@ -22,8 +22,8 @@ const t = useTranslations('fr');
         <div class="flex items-center space-x-6">
           <a href="/" class="text-text_muted hover:text-text_main font-medium" data-i18n="nav.back_home" data-i18n-type="plain">{t('nav.back_home')}</a>
           <div class="inline-flex items-center space-x-1 text-xs font-semibold bg-white border border-border rounded-full p-1 shadow-sm">
-            <a href="/mentions-legales" class="px-3 py-1 rounded-full bg-primary text-white">FR</a>
-            <a href="/en/legal-notice" class="px-3 py-1 rounded-full text-text_muted hover:text-text_main">EN</a>
+            <a href="/mentions-legales" data-lang-switch="fr" class="px-3 py-1 rounded-full bg-primary text-white">FR</a>
+            <a href="/en/legal-notice" data-lang-switch="en" class="px-3 py-1 rounded-full text-text_muted hover:text-text_main">EN</a>
           </div>
         </div>
       </div>

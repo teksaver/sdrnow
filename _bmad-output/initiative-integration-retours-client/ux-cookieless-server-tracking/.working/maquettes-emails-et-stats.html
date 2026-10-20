@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maquettes UX — Emails d'Alerte & Dashboard /stats (SDRnow)</title>
+  <!-- Governed by: DESIGN.md (Brand & Style, Colors, Typography, Components) & EXPERIENCE.md (Information Architecture, Component Patterns, Key Flows) -->
+  <style>
+    :root {
+      --primary: #F26522;
+      --primary-hover: #D95316;
+      --primary-soft: #FFF3ED;
+      --chrome-bg: #111827;
+      --chrome-surface: #1F2937;
+      --chrome-border: #374151;
+      --chrome-text: #F9FAFB;
+      --chrome-muted: #9CA3AF;
+      --page-bg: #F9FAFB;
+      --card-bg: #FFFFFF;
+      --text-main: #111827;
+      --text-muted: #4B5563;
+      --border: #E5E7EB;
+      --green: #15803D;
+      --green-bg: #DCFCE7;
+      --amber: #B45309;
+      --amber-bg: #FEF3C7;
+      --blue: #1D4ED8;
+      --blue-bg: #DBEAFE;
+      --purple: #6D28D9;
+      --purple-bg: #EDE9FE;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      background: #0B0F19;
+      color: var(--text-main);
+      line-height: 1.5;
+    }
+    /* Studio Switcher Bar */
+    .studio-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #090D16;
+      border-bottom: 1px solid #1E293B;
+      padding: 0.85rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      color: #F8FAFC;
+    }
+    .studio-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .studio-badge {
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tab-group {
+      display: flex;
+      gap: 0.5rem;
+      background: #1E293B;
+      padding: 0.25rem;
+      border-radius: 8px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: #94A3B8;
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+    .canvas {
+      max-width: 1180px;
+      margin: 2rem auto 4rem;
+      padding: 0 1.25rem;
+    }
+    .screen-section {
+      margin-bottom: 3.5rem;
+    }
+    .screen-label {
+      color: #94A3B8;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .screen-label span {
+      color: #F8FAFC;
+      font-size: 1rem;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    /* EMAIL MOCKUP FRAMES */
+    .email-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 1.75rem;
+      align-items: start;
+    }
+    .mail-client {
+      background: #FFFFFF;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+      border: 1px solid #334155;
+    }
+    .mail-inbox-row {
+      background: #F1F5F9;
+      padding: 0.75rem 1.1rem;
+      border-bottom: 1px solid #CBD5E1;
+      font-size: 0.8rem;
+    }
+    .mail-inbox-row .inbox-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #64748B;
+      margin-bottom: 0.2rem;
+    }
+    .mail-subject {
+      font-weight: 800;
+      color: #0F172A;
+      font-size: 0.92rem;
+    }
+    .mail-preheader {
+      color: #64748B;
+      font-size: 0.78rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mail-meta {
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      background: #FAFAFA;
+    }
+    .mail-body {
+      padding: 1.5rem 1.35rem;
+      background: #F9FAFB;
+    }
+    .email-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .email-card-header {
+      background: var(--chrome-bg);
+      color: #FFFFFF;
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid var(--primary);
+    }
+    .email-card-body {
+      padding: 1.25rem;
+    }
+    .signal-banner {
+      background: var(--primary-soft);
+      border-left: 4px solid var(--primary);
+      padding: 0.75rem 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+      color: #7C2D12;
+    }
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
+      margin-bottom: 1.1rem;
+    }
+    .kpi-mini {
+      background: #F9FAFB;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem;
+      text-align: center;
+    }
+    .kpi-mini .val {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+    .kpi-mini .lbl {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .timeline-list {
+      list-style: none;
+      border-left: 2px solid #E5E7EB;
+      margin-left: 0.5rem;
+      padding-left: 1rem;
+      font-size: 0.83rem;
+      margin-bottom: 1.25rem;
+    }
+    .timeline-list li {
+      position: relative;
+      margin-bottom: 0.6rem;
+      color: #374151;
+    }
+    .timeline-list li::before {
+      content: "";
+      position: absolute;
+      left: -1.35rem;
+      top: 0.35rem;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+    }
+    .timeline-time {
+      font-family: ui-monospace, monospace;
+      font-size: 0.75rem;
+      color: #6B7280;
+      margin-right: 0.35rem;
+    }
+    .email-cta {
+      display: inline-block;
+      background: var(--primary);
+      color: #FFFFFF;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.83rem;
+      padding: 0.6rem 1.1rem;
+      border-radius: 6px;
+    }
+
+    /* DASHBOARD /STATS MOCKUP */
+    .browser-frame {
+      background: var(--page-bg);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+      border: 1px solid #334155;
+    }
+    .browser-bar {
+      background: #1E293B;
+      padding: 0.65rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .dots {
+      display: flex;
+      gap: 0.35rem;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; }
+    .dot.r { background: #EF4444; }
+    .dot.y { background: #F59E0B; }
+    .dot.g { background: #10B981; }
+    .url-box {
+      background: #0F172A;
+      color: #E2E8F0;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      padding: 0.3rem 0.85rem;
+      border-radius: 6px;
+      flex-grow: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Admin Header inside /stats */
+    .admin-header {
+      background: var(--chrome-bg);
+      color: var(--chrome-text);
+      padding: 0.9rem 1.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      border-bottom: 1px solid var(--chrome-border);
+    }
+    .admin-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+    .admin-brand-logo {
+      font-weight: 900;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    .admin-brand-logo span { color: var(--primary); }
+    .admin-nav-pills {
+      display: flex;
+      gap: 0.4rem;
+      background: var(--chrome-surface);
+      padding: 0.25rem;
+      border-radius: 999px;
+      border: 1px solid var(--chrome-border);
+    }
+    .admin-nav-pill {
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      color: var(--chrome-muted);
+      text-decoration: none;
+    }
+    .admin-nav-pill.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* Link Generator Strip */
+    .link-gen-bar {
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 1.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .link-gen-left {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .link-input-group {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #F9FAFB;
+      font-family: ui-monospace, monospace;
+      font-size: 0.82rem;
+    }
+    .link-prefix {
+      padding: 0.4rem 0.6rem;
+      color: #6B7280;
+      background: #F3F4F6;
+      border-right: 1px solid #E5E7EB;
+    }
+    .link-slug-input {
+      border: none;
+      background: #FFFFFF;
+      padding: 0.4rem 0.65rem;
+      font-family: ui-monospace, monospace;
+      font-weight: 700;
+      color: var(--text-main);
+      width: 150px;
+    }
+    .btn-copy-link {
+      background: var(--chrome-bg);
+      color: #fff;
+      border: none;
+      padding: 0.42rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .period-pills {
+      display: flex;
+      gap: 0.35rem;
+    }
+    .period-pill {
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 0.3rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .period-pill.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    /* Dashboard Content */
+    .dash-content {
+      padding: 1.75rem;
+    }
+    .dash-section {
+      margin-bottom: 2rem;
+    }
+    .dash-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.85rem;
+    }
+    .dash-section-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .dash-section-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* Table Radar Prospects */
+    .radar-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    table.radar-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+    .radar-table th {
+      background: #F9FAFB;
+      text-align: left;
+      padding: 0.7rem 1rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .radar-table td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .radar-table tr:last-child td { border-bottom: none; }
+    .radar-table tr.hot-row {
+      background: #FFFDFB;
+    }
+    .slug-pill {
+      font-family: ui-monospace, monospace;
+      font-weight: 800;
+      font-size: 0.88rem;
+      color: var(--text-main);
+    }
+    .slug-path {
+      color: #9CA3AF;
+      font-weight: 500;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.18rem 0.55rem;
+      border-radius: 999px;
+      margin-right: 0.3rem;
+      margin-bottom: 0.2rem;
+    }
+    .b-hot { background: #FFEDD5; color: #C2410C; border: 1px solid #FDBA74; }
+    .b-cta { background: var(--green-bg); color: var(--green); border: 1px solid #86EFAC; }
+    .b-copy { background: var(--purple-bg); color: var(--purple); border: 1px solid #C4B5FD; }
+    .b-view { background: var(--blue-bg); color: var(--blue); border: 1px solid #93C5FD; }
+    .b-adblock { background: var(--amber-bg); color: var(--amber); border: 1px solid #FCD34D; }
+    .b-neutral { background: #F3F4F6; color: #374151; border: 1px solid #D1D5DB; }
+
+    /* KPIs & Funnel Grid */
+    .stats-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .stat-box {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem 1.25rem;
+    }
+    .stat-box-lbl {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+    }
+    .stat-box-val {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1.1;
+      margin-bottom: 0.35rem;
+    }
+    .stat-box-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .funnel-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 1.25rem;
+    }
+    @media (max-width: 820px) {
+      .funnel-grid, .email-grid { grid-template-columns: 1fr; }
+    }
+    .panel-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .panel-card h3 {
+      font-size: 0.9rem;
+      font-weight: 800;
+      margin-bottom: 0.9rem;
+      color: var(--text-main);
+    }
+    .offer-bar-row {
+      margin-bottom: 0.85rem;
+    }
+    .offer-bar-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .offer-bar-track {
+      height: 10px;
+      background: #F3F4F6;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .offer-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="studio-nav">
+    <div class="studio-title">
+      <span class="studio-badge">BMad UX Studio</span>
+      Maquettes : Emails d'Alerte &amp; Tableau de Bord <code>/stats</code>
+    </div>
+    <div style="font-size: 0.8rem; color: #94A3B8;">
+      Charte héritée : Orange SDRnow <code>#F26522</code> • Chrome Admin <code>#111827</code> • Typo <code>Inter</code>
+    </div>
+  </nav>
+
+  <main class="canvas">
+
+    <!-- SECTION 1 : LES 2 EMAILS -->
+    <section class="screen-section">
+      <div class="screen-label">
+        Surface 1 &amp; 2 — <span>Les 2 Emails reçus par Jean-Charles (Scaleway TEM)</span>
+      </div>
+
+      <div class="email-grid">
+
+        <!-- EMAIL 1 : ALERTE PROSPECT CHAUD -->
+        <div class="mail-client">
+          <div class="mail-inbox-row">
+            <div class="inbox-tag">Aperçu Boîte de réception — Alerte Prospect (Debounce 2 min)</div>
+            <div class="mail-subject">🔥 [SDRnow] acme-drh vient de consulter votre offre (2 appareils • Clic RDV Starter)</div>
+            <div class="mail-preheader">Partage interne détecté (iPhone + Mac) • 2 min 15 s de lecture • A copié le tarif Starter 1 990 € HT</div>
+          </div>
+          <div class="mail-meta">
+            <span><strong>De :</strong> Radar SDRnow &lt;alerte@sdrnow.fr&gt;</span>
+            <span><strong>À :</strong> jcm@sdrnow.fr • 14:18</span>
+          </div>
+          <div class="mail-body">
+            <div class="email-card">
+              <div class="email-card-header">
+                <div>
+                  <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #FDBA74; font-weight: 700;">Radar Prospect B2B</div>
+                  <div style="font-size: 1.15rem; font-weight: 800;">/pour/acme-drh</div>
+                </div>
+                <span class="badge b-hot" style="margin:0;">🔥 Partage interne (2 appareils)</span>
+              </div>
+              <div class="email-card-body">
+                <div class="signal-banner">
+                  <strong>Signal fort :</strong> Ce lien a été ouvert sur <strong>2 appareils distincts</strong> (transfert probable à un autre décideur) et a déclenché un clic sur <strong>Package Starter (1 990 € HT)</strong>.
+                </div>
+
+                <div class="kpi-row">
+                  <div class="kpi-mini">
+                    <div class="val">2m 15s</div>
+                    <div class="lbl">Lecture active</div>
+                  </div>
+                  <div class="kpi-mini">
+                    <div class="val">2</div>
+                    <div class="lbl">Appareils (#anon)</div>
+                  </div>
+                  <div class="kpi-mini">
+                    <div class="val" style="color: var(--green);">Starter</div>
+                    <div class="lbl">CTA Cliqué</div>
+                  </div>
+                </div>
+
+                <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">
+                  Chronologie de la consultation
+                </div>
+                <ul class="timeline-list">
+                  <li><span class="timeline-time">14:12:04</span> Ouverture de <code>/pour/acme-drh</code> sur <strong>iPhone (Safari FR)</strong> depuis LinkedIn</li>
+                  <li><span class="timeline-time">14:12:48</span> Lecture jusqu'à la section <strong>Tarifs (Pricing)</strong></li>
+                  <li><span class="timeline-time">14:13:10</span> <strong>Copie de texte (Ctrl+C)</strong> dans la carte <em>Package Starter 1 990 €</em></li>
+                  <li><span class="timeline-time">14:15:22</span> Ouverture du même lien sur un <strong>2e appareil : Mac (Chrome FR)</strong></li>
+                  <li><span class="timeline-time">14:16:05</span> Clic sur <strong>Mentions légales</strong> (vérification société)</li>
+                  <li><span class="timeline-time">14:16:19</span> <strong>Clic CTA « Je prends rendez-vous » — Carte Starter</strong> (<code>/rdv/starter</code>)</li>
+                </ul>
+
+                <a href="https://staging.sdrnow.fr/stats" class="email-cta">Ouvrir le Radar complet (/stats) →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EMAIL 2 : DIGEST DE MINUIT -->
+        <div class="mail-client">
+          <div class="mail-inbox-row">
+            <div class="inbox-tag">Aperçu Boîte de réception — Digest Minuit (Envoyé uniquement si &ge; 1 visiteur humain)</div>
+            <div class="mail-subject">📊 [SDRnow] Bilan du 20 oct. : 6 visiteurs anonymes (2 clics RDV • 4 ont lu les tarifs)</div>
+            <div class="mail-preheader">5 visites complètes + 1 sous Adblock (19 robots filtrés) • Voir le détail des consultations</div>
+          </div>
+          <div class="mail-meta">
+            <span><strong>De :</strong> Radar SDRnow &lt;alerte@sdrnow.fr&gt;</span>
+            <span><strong>À :</strong> jcm@sdrnow.fr • 00:00</span>
+          </div>
+          <div class="mail-body">
+            <div class="email-card">
+              <div class="email-card-header">
+                <div>
+                  <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #9CA3AF; font-weight: 700;">Digest Quotidien Audience Anonyme</div>
+                  <div style="font-size: 1.1rem; font-weight: 800;">Mardi 20 octobre 2026</div>
+                </div>
+                <span class="badge b-cta" style="margin:0;">2 Clics RDV</span>
+              </div>
+              <div class="email-card-body">
+                <div class="kpi-row">
+                  <div class="kpi-mini">
+                    <div class="val">6</div>
+                    <div class="lbl">Visiteurs Humains</div>
+                  </div>
+                  <div class="kpi-mini">
+                    <div class="val">4 <span style="font-size:0.8rem; color:#6B7280;">(67%)</span></div>
+                    <div class="lbl">Tarifs vus</div>
+                  </div>
+                  <div class="kpi-mini">
+                    <div class="val" style="color: var(--primary);">2 <span style="font-size:0.8rem;">(33%)</span></div>
+                    <div class="lbl">Clics CTA</div>
+                  </div>
+                </div>
+
+                <div style="font-size: 0.8rem; background: #F3F4F6; padding: 0.6rem 0.85rem; border-radius: 6px; margin-bottom: 1rem; color: #374151;">
+                  <strong>Répartition technique :</strong> 5 avec télémétrie JS complète • <strong>1 sous Adblock/Sans-JS</strong> • <em>19 robots/scanners écartés</em>.<br/>
+                  <strong>Choix des offres :</strong> 1 clic <em>Starter (1 990 €)</em> • 1 clic <em>Hero (30 min)</em> • 0 clic <em>Strategy</em>.
+                </div>
+
+                <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">
+                  Consultations anonymes notables d'hier
+                </div>
+                <ul class="timeline-list">
+                  <li>
+                    <strong>Visiteur #a4f9c2</strong> (16:40 • LinkedIn • Mac) — <strong>1m 50s</strong> • Tarifs vus • Copie tarif • <span style="color:var(--green); font-weight:700;">Clic RDV Starter</span>
+                  </li>
+                  <li>
+                    <strong>Visiteur #8c2e11</strong> (11:15 • Direct • Mobile iOS • <span style="color:var(--amber); font-weight:700;">Adblock</span>) — <span style="color:var(--green); font-weight:700;">Clic RDV Hero</span>
+                  </li>
+                  <li>
+                    <strong>Visiteur #3d7b09</strong> (09:30 • Google • Windows) — <strong>1m 12s</strong> • Tarifs vus • Switch FR→EN (sans clic RDV)
+                  </li>
+                </ul>
+
+                <a href="https://staging.sdrnow.fr/stats" class="email-cta">Consulter le tableau de bord /stats →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 2 : TABLEAU DE BORD /STATS -->
+    <section class="screen-section">
+      <div class="screen-label">
+        Surface 3 — <span>Tableau de bord <code>staging.sdrnow.fr/stats</code> (Desktop &amp; Mobile)</span>
+      </div>
+
+      <div class="browser-frame">
+        <div class="browser-bar">
+          <div class="dots">
+            <div class="dot r"></div>
+            <div class="dot y"></div>
+            <div class="dot g"></div>
+          </div>
+          <div class="url-box">
+            <span>🔒 https://staging.sdrnow.fr/stats</span>
+            <span style="color: #10B981; font-size: 0.72rem;">Basic Auth: admin • Zéro cookie client</span>
+          </div>
+        </div>
+
+        <!-- Top Admin Bar shared with Editor -->
+        <header class="admin-header">
+          <div class="admin-brand">
+            <div class="admin-brand-logo">SDR<span>now</span></div>
+            <div class="admin-nav-pills">
+              <a href="#" class="admin-nav-pill">✏️ Éditeur de textes</a>
+              <a href="#" class="admin-nav-pill active">📡 Radar &amp; Stats</a>
+            </div>
+          </div>
+          <div class="period-pills">
+            <button class="period-pill">Aujourd'hui</button>
+            <button class="period-pill active">7 derniers jours</button>
+            <button class="period-pill">30 jours</button>
+            <button class="period-pill">⬇ Export .jsonl</button>
+          </div>
+        </header>
+
+        <!-- Quick Link Generator Bar -->
+        <div class="link-gen-bar">
+          <div class="link-gen-left">
+            <span>🔗 Créer un lien prospect à la volée :</span>
+            <div class="link-input-group">
+              <span class="link-prefix">https://sdrnow.fr/pour/</span>
+              <input type="text" class="link-slug-input" value="dalkia-dsi" readonly />
+            </div>
+            <button class="btn-copy-link">Copier le lien FR</button>
+            <button class="period-pill" style="cursor:pointer;">Copier EN (/en/for/…)</button>
+          </div>
+          <div style="font-size: 0.76rem; color: var(--text-muted);">
+            💡 Astuce : vous pouvez aussi taper directement <code>sdrnow.fr/pour/nom-client</code> dans vos messages sans passer par ici.
+          </div>
+        </div>
+
+        <div class="dash-content">
+
+          <!-- BLOC 1 : RADAR PROSPECTS NOMINATIFS -->
+          <div class="dash-section">
+            <div class="dash-section-header">
+              <div class="dash-section-title">
+                🎯 1. Radar Prospects Identifiés (<code>/pour/&lt;slug&gt;</code> &amp; <code>/offre/&lt;slug&gt;</code>)
+              </div>
+              <div class="dash-section-sub">
+                Trié par dernière activité • Alertes email automatiques après 2 min d'inactivité
+              </div>
+            </div>
+
+            <div class="radar-card">
+              <table class="radar-table">
+                <thead>
+                  <tr>
+                    <th>Prospect (Slug)</th>
+                    <th>Dernière visite</th>
+                    <th>Appareils &amp; Revisites</th>
+                    <th>Lecture active</th>
+                    <th>Signaux d'intention &amp; Comportement</th>
+                    <th>Conversion CTA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="hot-row">
+                    <td>
+                      <span class="slug-pill"><span class="slug-path">/pour/</span>acme-drh</span>
+                    </td>
+                    <td>
+                      <strong>Aujourd'hui 14:16</strong><br/>
+                      <span style="font-size:0.75rem; color:#6B7280;">LinkedIn • iPhone + Mac</span>
+                    </td>
+                    <td>
+                      <span class="badge b-hot">🔥 2 appareils (Partage interne)</span><br/>
+                      <span style="font-size:0.75rem; color:#6B7280;">2 sessions</span>
+                    </td>
+                    <td><strong>2m 15s</strong></td>
+                    <td>
+                      <span class="badge b-view">👁 Tarifs vus</span>
+                      <span class="badge b-copy">📋 Copie Tarif Starter</span>
+                      <span class="badge b-neutral">⚖️ Mentions légales</span>
+                    </td>
+                    <td>
+                      <span class="badge b-cta">✅ Clic RDV Starter</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="slug-pill"><span class="slug-path">/offre/</span>groupe-securite</span>
+                    </td>
+                    <td>
+                      <strong>Hier 17:42</strong><br/>
+                      <span style="font-size:0.75rem; color:#6B7280;">Direct (Mail) • Windows</span>
+                    </td>
+                    <td>
+                      <span class="badge b-neutral">1 appareil</span>
+                      <span class="badge b-hot">🔄 Revisite à J+3</span>
+                    </td>
+                    <td><strong>3m 05s</strong></td>
+                    <td>
+                      <span class="badge b-view">👁 Tarifs vus</span>
+                      <span class="badge b-neutral">🖨 Export PDF</span>
+                      <span class="badge b-copy">📞 Clic 06 67 90 24 94</span>
+                    </td>
+                    <td>
+                      <span style="font-size:0.78rem; color:#6B7280;">Appel direct (Tel)</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="slug-pill"><span class="slug-path">/en/for/</span>nordic-saas</span>
+                    </td>
+                    <td>
+                      <strong>18 oct. 10:05</strong><br/>
+                      <span style="font-size:0.75rem; color:#6B7280;">LinkedIn • Mac (Brave)</span>
+                    </td>
+                    <td>
+                      <span class="badge b-neutral">1 appareil</span>
+                      <span class="badge b-adblock">🛡 Adblock / Sans JS</span>
+                    </td>
+                    <td><span style="color:#9CA3AF;">N/A (Sans JS)</span></td>
+                    <td>
+                      <span class="badge b-neutral">🇬🇧 Version EN</span>
+                      <span class="badge b-adblock">HTML + CSS validés</span>
+                    </td>
+                    <td>
+                      <span class="badge b-cta">✅ Clic Book Strategy</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- BLOC 2 : AUDIENCE ANONYME, ADBLOCK & ENTONNOIR PAR CARTE -->
+          <div class="dash-section" style="margin-bottom:0;">
+            <div class="dash-section-header">
+              <div class="dash-section-title">
+                📊 2. Audience Anonyme (<code>/</code> &amp; <code>/en</code>) &amp; Entonnoir par Carte d'Offre
+              </div>
+              <div class="dash-section-sub">
+                Sessions corrélées sans cookie via <code>anon_id</code> journalier • Digest email envoyé à minuit si &ge; 1 visite
+              </div>
+            </div>
+
+            <div class="stats-grid-4">
+              <div class="stat-box">
+                <div class="stat-box-lbl">Visiteurs Humains (7j)</div>
+                <div class="stat-box-val">38</div>
+                <div class="stat-box-sub">
+                  <strong>32</strong> JS complet • <strong style="color:var(--amber);">6 sous Adblock (16%)</strong>
+                </div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-box-lbl">Ont lu jusqu'aux Tarifs</div>
+                <div class="stat-box-val">24 <span style="font-size:1rem; color:#6B7280;">(75%)</span></div>
+                <div class="stat-box-sub">
+                  Temps actif médian : <strong>1m 28s</strong> • 4 copies de prix
+                </div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-box-lbl">Clics d'Action (Total)</div>
+                <div class="stat-box-val" style="color:var(--primary);">9 <span style="font-size:1rem; color:#6B7280;">(23,6%)</span></div>
+                <div class="stat-box-sub">
+                  <strong>8</strong> clics RDV Calendly + <strong>1</strong> clic Téléphone
+                </div>
+              </div>
+              <div class="stat-box" style="background:#F9FAFB;">
+                <div class="stat-box-lbl">Bots &amp; Scanners Écartés</div>
+                <div class="stat-box-val" style="color:#6B7280;">112</div>
+                <div class="stat-box-sub">
+                  Aperçus LinkedInBot, SafeLinks &amp; crawlers exclus des stats
+                </div>
+              </div>
+            </div>
+
+            <div class="funnel-grid">
+              <div class="panel-card">
+                <h3>🎯 Conversion par Carte d'Offre (Routes <code>/rdv/…</code> &amp; <code>/en/book/…</code>)</h3>
+                <div class="offer-bar-row">
+                  <div class="offer-bar-head">
+                    <span>1. Package SDRnow Starter (1 990 € HT) — <code>/rdv/starter</code></span>
+                    <span><strong>5 clics</strong> (56% des conversions)</span>
+                  </div>
+                  <div class="offer-bar-track"><div class="offer-bar-fill" style="width: 56%;"></div></div>
+                </div>
+                <div class="offer-bar-row">
+                  <div class="offer-bar-head">
+                    <span>2. Bouton Hero Haut de page (30 min) — <code>/rdv/decouverte</code></span>
+                    <span><strong>2 clics</strong> (22% des conversions)</span>
+                  </div>
+                  <div class="offer-bar-track"><div class="offer-bar-fill" style="width: 22%; background:#4B5563;"></div></div>
+                </div>
+                <div class="offer-bar-row">
+                  <div class="offer-bar-head">
+                    <span>3. Package SDRnow Strategy (Sur devis) — <code>/rdv/strategy</code></span>
+                    <span><strong>1 clic</strong> (11% des conversions)</span>
+                  </div>
+                  <div class="offer-bar-track"><div class="offer-bar-fill" style="width: 11%; background:#6B7280;"></div></div>
+                </div>
+                <div class="offer-bar-row" style="margin-bottom:0;">
+                  <div class="offer-bar-head">
+                    <span>4. Appel direct Téléphone / Email — <code>06 67 90 24 94</code></span>
+                    <span><strong>1 clic</strong> (11% des conversions)</span>
+                  </div>
+                  <div class="offer-bar-track"><div class="offer-bar-fill" style="width: 11%; background:#6D28D9;"></div></div>
+                </div>
+              </div>
+
+              <div class="panel-card">
+                <h3>🌍 Origines du Trafic Humain (Referer)</h3>
+                <table class="radar-table" style="font-size:0.8rem;">
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Visiteurs</th>
+                      <th>Clics CTA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>LinkedIn</strong> (<code>linkedin.com</code>)</td>
+                      <td>19 (50%)</td>
+                      <td><strong>5</strong></td>
+                    </tr>
+                    <tr>
+                      <td><strong>Accès direct / Messagerie mail</strong></td>
+                      <td>14 (37%)</td>
+                      <td><strong>3</strong></td>
+                    </tr>
+                    <tr>
+                      <td><strong>Moteurs &amp; Autres</strong></td>
+                      <td>5 (13%)</td>
+                      <td><strong>1</strong></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

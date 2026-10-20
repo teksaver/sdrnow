@@ -11,6 +11,10 @@ Environment=STAGING_DIR=/var/www/staging
 Environment=PROD_DIR=/var/www/html
 Environment=EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js
 EnvironmentFile=-/etc/sdrnow/staging.env
+# tmpfs /run/sdrnow: daily anonymisation secret, kept across restarts, never on disk
+RuntimeDirectory=sdrnow
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
 ExecStart=/usr/bin/node /opt/sdrnow/staging-server.js
 Restart=always
 RestartSec=3
