@@ -29,6 +29,13 @@ const TEM_REGION = process.env.TEM_REGION || 'fr-par';
 const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO || 'jcm@sdrnow.fr';
 const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || 'alertes@sdrnow.fr';
 const STATS_URL = process.env.STATS_URL || 'https://sdrnow.fr/stats';
+// Mailpit (shared capture instance on the VM, never delivers anything): Send API reached by
+// Node directly on the loopback; its UI is served behind the admin password on staging.
+const MAILPIT_URL = (process.env.MAILPIT_URL || 'http://127.0.0.1:8025/mail').replace(/\/+$/, '');
+const MAILPIT_UI_URL = 'https://staging.sdrnow.fr/mail/';
+// Append-only send log (one line per attempt and per transport), shown on each <site>/stats
+const EMAIL_LOG_FILE = process.env.EMAIL_LOG_FILE || '/etc/sdrnow/email-log.jsonl';
+const EMAIL_LOG_STATS_LIMIT = 50;
 
 // --- Helper Utilities ---
 
@@ -828,7 +835,76 @@ export async function sendTemEmail(message, config = {}) {
     }
     throw new Error(`HTTP ${res.status} ${detail}`);
   }
-  return true;
+  // TEM message id, kept in the send log
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Body unreadable: the send itself succeeded
+  }
+  return (data && Array.isArray(data.emails) && data.emails[0] && data.emails[0].id) || null;
+}
+
+// --- Mailpit Send API (capture only: Mailpit has no relay, nothing is ever delivered) ---
+
+export async function sendMailpitEmail(message, config = {}) {
+  const url = (config.url || MAILPIT_URL).replace(/\/+$/, '');
+  const from = config.from || ALERT_EMAIL_FROM;
+  const fetchImpl = config.fetch || fetch;
+  const res = await fetchImpl(`${url}/api/v1/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      From: { Email: from, Name: 'Radar SDRnow' },
+      To: [{ Email: message.to }],
+      Subject: message.subject,
+      Text: message.text,
+      HTML: message.html,
+      Tags: message.tags || [],
+    }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = (await res.text()).slice(0, 300);
+    } catch {
+      // ignore
+    }
+    throw new Error(`HTTP ${res.status} ${detail}`);
+  }
+  const data = await res.json();
+  if (!data || !data.ID) throw new Error('Réponse Mailpit sans ID');
+  return data.ID;
+}
+
+function describeSendError(err) {
+  if (!err) return 'erreur inconnue';
+  const cause = err.cause && (err.cause.code || err.cause.message);
+  return `${err.message || err}${cause ? ` (${cause})` : ''}`.slice(0, 300);
+}
+
+export function readEmailLog(file, { site = null, limit = EMAIL_LOG_STATS_LIMIT } = {}) {
+  let content = '';
+  try {
+    content = fs.readFileSync(file, 'utf8');
+  } catch {
+    return [];
+  }
+  const lines = [];
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const rec = JSON.parse(line);
+      // A line without a valid timestamp would break the date rendering of /stats: skipped
+      if (!rec || typeof rec !== 'object' || typeof rec.ts !== 'string' || !Number.isFinite(Date.parse(rec.ts))) continue;
+      if (!site || rec.site === site) lines.push(rec);
+    } catch {
+      // Truncated / corrupt line: skipped
+    }
+  }
+  // Most recent first
+  return lines.slice(-limit).reverse();
 }
 
 // --- Aggregation (pure: rebuilt from analytics.jsonl, robust to restarts) ---
@@ -1267,14 +1343,20 @@ export function createTracker(options = {}) {
   const analyticsFile = options.analyticsFile || ANALYTICS_FILE;
   const ctaTargets = options.ctaTargets || getCtaTargets();
   const recipients = parseRecipients(options.alertRecipients ?? ALERT_EMAIL_TO);
+  // Site of this tracker: 'prod' (sdrnow.fr) or 'staging' (test visits of staging.sdrnow.fr)
+  const site = options.site === 'staging' ? 'staging' : 'prod';
+  // Transports: Mailpit always (capture, never delivered); TEM (real delivery) only for prod,
+  // once a TEM key is provisioned. Staging never reaches TEM, whatever the configuration.
+  const sendMailpit = options.sendMailpit || ((message) => sendMailpitEmail(message));
   const sendEmail = options.sendEmail || ((message) => sendTemEmail(message));
-  // Emails stay dormant until a TEM key is provisioned (TEM offer not yet active on the project);
-  // emailsDisabled (staging tracker): never any alert nor digest, whatever the configuration
-  const emailsDisabled = Boolean(options.emailsDisabled);
-  const emailEnabled = !emailsDisabled && (Boolean(options.sendEmail) || Boolean(TEM_SECRET_KEY && TEM_PROJECT_ID));
+  const temEnabled = site === 'prod' && (Boolean(options.sendEmail) || Boolean(TEM_SECRET_KEY && TEM_PROJECT_ID));
+  // Send log shared by both sites (each /stats filters its own lines); next to an injected log
+  const emailLogFile = options.emailLogFile
+    || (options.analyticsFile ? path.join(path.dirname(options.analyticsFile), 'email-log.jsonl') : EMAIL_LOG_FILE);
   const now = options.now || Date.now;
   const debounceMs = options.debounceMs ?? 120000;
-  const statsUrl = options.statsUrl || STATS_URL;
+  // Email links point to the stats of the tracker's own site
+  const statsUrl = options.statsUrl || (site === 'staging' ? `${STATS_ENVS.staging.origin}/stats` : STATS_URL);
   // Daily secret kept on a systemd tmpfs (never on the SSD) so it survives same-day restarts
   const secretFile = options.secretFile || null;
 
@@ -1357,22 +1439,58 @@ export function createTracker(options = {}) {
     }
   }
 
-  function deliver(email) {
-    if (!emailEnabled) return;
+  // One line per attempt and per transport; never the HTML body nor any IP
+  function logSend(entry) {
+    try {
+      fs.mkdirSync(path.dirname(emailLogFile), { recursive: true });
+      fs.appendFileSync(emailLogFile, JSON.stringify(entry) + '\n', 'utf8');
+    } catch (err) {
+      console.error('[Email] Journal d\'envoi impossible :', err.message);
+    }
+  }
+
+  function sendVia(transport, label, fn, message, meta) {
+    return track(
+      Promise.resolve()
+        .then(() => fn(message))
+        .then(
+          (id) => ({ ok: true, error: null, id: id && typeof id !== 'boolean' ? String(id).slice(0, 128) : null }),
+          (err) => {
+            const error = describeSendError(err);
+            console.error(`[${label}] Échec de l'envoi « ${message.subject} » : ${error}`);
+            return { ok: false, error, id: null };
+          }
+        )
+        .then((result) => logSend({
+          ts: new Date(now()).toISOString(),
+          site,
+          kind: meta.kind,
+          ref: meta.ref,
+          to: message.to,
+          subject: message.subject,
+          transport,
+          ...result,
+        }))
+    );
+  }
+
+  // meta = { kind: 'alert' | 'digest', ref: slug | date }
+  function deliver(email, meta) {
+    const subject = site === 'staging' ? `[STAGING] ${email.subject}` : email.subject;
+    const tags = site === 'staging' ? ['staging'] : (temEnabled ? ['prod', 'tem'] : ['prod']);
     for (const to of recipients) {
-      // One individual send per recipient: no recipient ever sees the others
-      track(
-        Promise.resolve()
-          .then(() => sendEmail({ ...email, to }))
-          .catch((err) => console.error(`[TEM] Échec de l'envoi « ${email.subject} » : ${err && err.message ? err.message : err}`))
-      );
+      // One individual send per recipient: no recipient ever sees the others.
+      // Each transport is independent: a failure of one never blocks the other.
+      const message = { ...email, subject, to };
+      if (temEnabled) sendVia('tem', 'TEM', sendEmail, message, meta);
+      sendVia('mailpit', 'Mailpit', sendMailpit, { ...message, tags }, meta);
     }
   }
 
   async function sendDigest(date) {
     const stats = computeStats(readEvents(), { period: 'today', today: date, ctaKeys: Object.keys(ctaTargets) });
-    if (stats.humans < 1) return false; // quiet day: no TEM call at all
-    deliver(buildDigestEmail({ date, stats, statsUrl }));
+    if (stats.humans < 1) return false; // quiet day: no send at all
+    deliver(buildDigestEmail({ date, stats, statsUrl }), { kind: 'digest', ref: date });
     return true;
   }
 
@@ -1386,7 +1504,7 @@ export function createTracker(options = {}) {
     visitors = new Map();
     rateLimits = new Map();
     dropUnarmedAlerts();
-    if (!emailsDisabled) track(sendDigest(previous).catch((err) => console.error('[TEM] Digest impossible :', err.message)));
+    track(sendDigest(previous).catch((err) => console.error('[Email] Digest impossible :', err.message)));
     return true;
   }
 
@@ -1401,7 +1519,7 @@ export function createTracker(options = {}) {
     for (const [id, st] of visitors) {
       if (st.slug === slug && st.tier >= 2 && !st.bot) humans.add(id);
     }
-    deliver(buildProspectAlertEmail({ slug, events, devices: humans.size, statsUrl }));
+    deliver(buildProspectAlertEmail({ slug, events, devices: humans.size, statsUrl }), { kind: 'alert', ref: slug });
   }
 
   // Slugs only seen by non-human visitors never arm a timer: do not keep them forever
@@ -1458,7 +1576,7 @@ export function createTracker(options = {}) {
     };
     if (fields.tester) record.tester = String(fields.tester).slice(0, 64);
     append(record);
-    if (record.slug && !state.bot && !emailsDisabled) trackAlert(record, state);
+    if (record.slug && !state.bot) trackAlert(record, state);
     return record;
   }
 
@@ -1531,7 +1649,10 @@ export function createTracker(options = {}) {
   }
 
   return {
+    site,
     analyticsFile,
+    emailLogFile,
+    temEnabled,
     ctaTargets,
     recipients,
     now,
@@ -1545,6 +1666,7 @@ export function createTracker(options = {}) {
     checkRateLimit,
     readEvents,
     stats,
+    emailLog: (limit = EMAIL_LOG_STATS_LIMIT) => readEmailLog(emailLogFile, { site, limit }),
     sendDigest,
     flushAlerts() {
       for (const [slug, p] of [...pendingAlerts]) {
@@ -1631,14 +1753,34 @@ const STATS_ENVS = {
   },
   staging: {
     label: 'Staging — visites de test',
-    detail: 'Visites de staging.sdrnow.fr par les testeurs authentifiés • aucun email envoyé',
+    detail: 'Visites de staging.sdrnow.fr par les testeurs authentifiés • emails capturés par Mailpit, jamais livrés',
     origin: 'https://staging.sdrnow.fr',
     editorUrl: '/',
     other: { label: 'Prod — sdrnow.fr', url: 'https://sdrnow.fr/stats' },
   },
 };
 
-export function renderStatsPage(stats, { ctaTargets = {}, env = 'prod' } = {}) {
+const EMAIL_KINDS = { alert: '🔥 Alerte', digest: '📊 Bilan' };
+const EMAIL_TRANSPORTS = { mailpit: 'Mailpit', tem: 'Scaleway TEM' };
+
+function renderEmailRow(e, today) {
+  const kind = EMAIL_KINDS[e.kind] || String(e.kind || '—');
+  const ref = e.ref ? `<br><span class="muted-sm"><code>${escapeHtmlAttr(e.ref)}</code></span>` : '';
+  const transport = EMAIL_TRANSPORTS[e.transport] || String(e.transport || '—');
+  const result = e.ok
+    ? statsBadge('neutral', '✅ Envoyé')
+    : `${statsBadge('neutral', '❌ Échec')}${e.error ? `<br><span class="muted-sm">${escapeHtmlAttr(e.error)}</span>` : ''}`;
+  return `<tr>
+<td><strong>${escapeHtmlAttr(formatLastVisit(e.ts, today))}</strong></td>
+<td>${escapeHtmlAttr(kind)}${ref}</td>
+<td>${escapeHtmlAttr(e.subject || '—')}</td>
+<td>${escapeHtmlAttr(e.to || '—')}</td>
+<td>${escapeHtmlAttr(transport)}</td>
+<td>${result}</td>
+</tr>`;
+}
+
+export function renderStatsPage(stats, { ctaTargets = {}, env = 'prod', emails = [] } = {}) {
   const site = STATS_ENVS[env] || STATS_ENVS.prod;
   const isStaging = env === 'staging';
   const periodLabel = (STATS_PERIODS.find(([k]) => k === stats.period) || STATS_PERIODS[0])[1];
@@ -1680,6 +1822,10 @@ export function renderStatsPage(stats, { ctaTargets = {}, env = 'prod' } = {}) {
     : '<tr><td colspan="3" class="empty">Aucun visiteur humain anonyme sur cette période.</td></tr>';
 
   const extraTargets = Object.keys(ctaTargets).filter((k) => !['hero', 'starter', 'strategy'].includes(k));
+
+  const emailRows = emails.length
+    ? emails.map((e) => renderEmailRow(e, stats.today)).join('\n')
+    : `<tr><td colspan="6" class="empty">📭 Aucun email envoyé pour l'instant depuis ${isStaging ? 'staging' : 'la prod'}. Les alertes « Prospect Chaud » et le bilan de minuit apparaîtront ici.</td></tr>`;
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -1761,6 +1907,7 @@ table.radar-table{width:100%;border-collapse:collapse;font-size:13.5px}
 .env-bar.env-staging{background:#FEF3C7;color:#78350F}
 .env-name{font-weight:800}
 .env-bar a{color:inherit;font-weight:700}
+.dash-section-sub a{color:var(--primary);font-weight:700}
 @media (max-width:820px){.env-bar{padding:10px 16px}}
 </style>
 </head>
@@ -1798,7 +1945,7 @@ table.radar-table{width:100%;border-collapse:collapse;font-size:13.5px}
   <section class="dash-section">
     <div class="dash-section-header">
       <h2 class="dash-section-title">🎯 1. Radar Prospects Identifiés (<code>/pour/&lt;slug&gt;</code> &amp; <code>/offre/&lt;slug&gt;</code>)</h2>
-      <div class="dash-section-sub">${escapeHtmlAttr(periodLabel)} • Trié par dernière activité • ${isStaging ? 'Aucune alerte email depuis staging' : "Alerte email après 2 min d'inactivité"}</div>
+      <div class="dash-section-sub">${escapeHtmlAttr(periodLabel)} • Trié par dernière activité • ${isStaging ? "Alerte capturée par Mailpit après 2 min d'inactivité" : "Alerte email après 2 min d'inactivité"}</div>
     </div>
     <div class="radar-card">
       <table class="radar-table">
@@ -1813,7 +1960,7 @@ ${rows}
   <section class="dash-section">
     <div class="dash-section-header">
       <h2 class="dash-section-title">📊 2. Audience Anonyme (<code>/</code> &amp; <code>/en</code>) &amp; Entonnoir par Carte d'Offre</h2>
-      <div class="dash-section-sub">Visiteurs reconnus le temps d'une journée, sans cookie • ${isStaging ? 'Aucun bilan email depuis staging' : 'Bilan email à minuit si au moins 1 visite'}</div>
+      <div class="dash-section-sub">Visiteurs reconnus le temps d'une journée, sans cookie • ${isStaging ? 'Bilan capturé par Mailpit à minuit si au moins 1 visite' : 'Bilan email à minuit si au moins 1 visite'}</div>
     </div>
     <div class="stats-grid-4">
       <div class="stat-box">
@@ -1854,6 +2001,21 @@ ${originRows}
           </tbody>
         </table>
       </div>
+    </div>
+  </section>
+
+  <section class="dash-section" id="emails">
+    <div class="dash-section-header">
+      <h2 class="dash-section-title">📬 3. Emails envoyés</h2>
+      <div class="dash-section-sub">${EMAIL_LOG_STATS_LIMIT} derniers envois ${isStaging ? 'de staging' : 'de la prod'} • <a href="${MAILPIT_UI_URL}" target="_blank" rel="noopener">Lire le contenu dans Mailpit →</a></div>
+    </div>
+    <div class="radar-card">
+      <table class="radar-table">
+        <thead><tr><th>Date</th><th>Type</th><th>Objet</th><th>Destinataire</th><th>Voie</th><th>Résultat</th></tr></thead>
+        <tbody>
+${emailRows}
+        </tbody>
+      </table>
     </div>
   </section>
 </main>
@@ -1909,16 +2071,22 @@ export function createRequestHandler(options = {}) {
     crypto.createHash('sha256').update(u, 'utf8').digest()
   );
   const expectedPassHash = Buffer.from(adminPassSha256, 'hex');
-  const tracker = options.tracker || createTracker(options);
+  // Injected staging log only (editor tests, tools): send log next to it, never the real /etc/sdrnow file
+  const emailLogFile = options.emailLogFile
+    || (!options.analyticsFile && options.stagingAnalyticsFile ? path.join(path.dirname(options.stagingAnalyticsFile), 'email-log.jsonl') : undefined);
+  const tracker = options.tracker || createTracker({ ...options, emailLogFile });
   const ctaTargets = tracker.ctaTargets;
-  // Test visits of staging.sdrnow.fr: own log, own daily secret, never any email
+  // Test visits of staging.sdrnow.fr: own log, own daily secret, emails to Mailpit only
   const stagingTracker = options.stagingTracker || createTracker({
     // Injected prod log (tests, tools): staging log next to it, never the real /etc/sdrnow file
     analyticsFile: options.stagingAnalyticsFile
       || (options.analyticsFile ? path.join(path.dirname(options.analyticsFile), 'analytics-staging.jsonl') : STAGING_ANALYTICS_FILE),
     ctaTargets,
     now: options.now,
-    emailsDisabled: true,
+    site: 'staging',
+    statsUrl: `${STATS_ENVS.staging.origin}/stats`,
+    emailLogFile: tracker.emailLogFile,
+    sendMailpit: options.sendMailpit,
   });
   const clock = tracker.now || Date.now;
 
@@ -2010,7 +2178,7 @@ export function createRequestHandler(options = {}) {
   function sendStatsPage(req, res, parsedUrl, statsTracker, env) {
     const requested = parsedUrl.searchParams.get('period');
     const period = STATS_PERIODS.some(([key]) => key === requested) ? requested : 'today';
-    const html = renderStatsPage(statsTracker.stats(period), { ctaTargets, env });
+    const html = renderStatsPage(statsTracker.stats(period), { ctaTargets, env, emails: statsTracker.emailLog() });
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
@@ -2618,18 +2786,20 @@ export function createServer(options = {}) {
 export function startServer() {
   // Timers (midnight rotation + digest) only run in the real server, never in tests
   const runtimeDir = (process.env.RUNTIME_DIRECTORY || '/run/sdrnow').split(':')[0];
-  const tracker = createTracker({ secretFile: path.join(runtimeDir, 'daily-secret.json') });
+  const tracker = createTracker({ site: 'prod', emailLogFile: EMAIL_LOG_FILE, secretFile: path.join(runtimeDir, 'daily-secret.json') });
   tracker.startTimers();
-  // Staging test visits: separate log and daily secret (same tmpfs), never any email
+  // Staging test visits: separate log and daily secret (same tmpfs), emails to Mailpit only
   const stagingTracker = createTracker({
+    site: 'staging',
+    statsUrl: `${STATS_ENVS.staging.origin}/stats`,
     analyticsFile: STAGING_ANALYTICS_FILE,
+    emailLogFile: EMAIL_LOG_FILE,
     secretFile: path.join(runtimeDir, 'daily-secret-staging.json'),
-    emailsDisabled: true,
   });
   stagingTracker.startTimers();
-  if (!TEM_SECRET_KEY || !TEM_PROJECT_ID) {
-    console.log('[TEM] Emails désactivés : TEM_SECRET_KEY ou SCW_DEFAULT_PROJECT_ID absent');
-  }
+  console.log(tracker.temEnabled
+    ? `[Email] Prod : Scaleway TEM + copie Mailpit (${MAILPIT_URL}) ; staging : Mailpit seul`
+    : `[Email] TEM inactif (TEM_SECRET_KEY ou SCW_DEFAULT_PROJECT_ID absent) : prod et staging capturés par Mailpit (${MAILPIT_URL})`);
   const server = createServer({ tracker, stagingTracker });
   // Loopback only: Caddy (same host) is the sole client, so X-Forwarded-For cannot be forged
   server.listen(PORT, '127.0.0.1', () => {
