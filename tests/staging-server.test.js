@@ -20,6 +20,7 @@ import {
   incrementRevision,
   createTracker,
   sendTemEmail,
+  sendMailpitEmail,
   classifyUa,
   uaFamily,
   getCtaTargets,
@@ -1016,14 +1017,21 @@ function setupTracking(trackerOptions = {}) {
   fs.writeFileSync(path.join(dirs.stagingDir, 'assets', 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><!-- staging --></svg>');
   const analyticsFile = path.join(dirs.baseTmp, 'etc-sdrnow', 'analytics.jsonl');
   const stagingAnalyticsFile = path.join(dirs.baseTmp, 'etc-sdrnow', 'analytics-staging.jsonl');
-  const ctx = { ...dirs, analyticsFile, stagingAnalyticsFile, clock: Date.parse('2026-10-20T12:00:00Z'), sent: [], prodResponses: [] };
+  const emailLogFile = path.join(dirs.baseTmp, 'etc-sdrnow', 'email-log.jsonl');
+  // ctx.sent: TEM sends (real delivery); ctx.mailpit: Mailpit captures
+  const ctx = { ...dirs, analyticsFile, stagingAnalyticsFile, emailLogFile, clock: Date.parse('2026-10-20T12:00:00Z'), sent: [], mailpit: [], prodResponses: [] };
   ctx.makeTracker = (extra = {}) =>
     createTracker({
       analyticsFile,
+      emailLogFile,
       ctaTargets: CTA,
       alertRecipients: ['jcm@sdrnow.fr', 'copie@example.fr'],
       sendEmail: async (message) => {
         ctx.sent.push(message);
+      },
+      sendMailpit: async (message) => {
+        ctx.mailpit.push(message);
+        return `mp-${ctx.mailpit.length}`;
       },
       now: () => ctx.clock,
       debounceMs: 40,
@@ -1031,8 +1039,8 @@ function setupTracking(trackerOptions = {}) {
       ...extra,
     });
   ctx.tracker = ctx.makeTracker();
-  // Staging test visits: separate log, emails disabled (sendEmail still wired to ctx.sent to prove it)
-  ctx.stagingTracker = ctx.makeTracker({ analyticsFile: stagingAnalyticsFile, emailsDisabled: true });
+  // Staging test visits: separate log, Mailpit only (sendEmail still wired to ctx.sent to prove TEM is never used)
+  ctx.stagingTracker = ctx.makeTracker({ analyticsFile: stagingAnalyticsFile, site: 'staging' });
   ctx.makeHandler = (tracker, stagingTracker = ctx.stagingTracker) =>
     createRequestHandler({
       stagingDir: dirs.stagingDir,
@@ -1069,14 +1077,22 @@ function setupTracking(trackerOptions = {}) {
   const readLog = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
   ctx.events = () => readLog(analyticsFile);
   ctx.stagingEvents = () => readLog(stagingAnalyticsFile);
+  ctx.emailLog = () => readLog(emailLogFile);
+  ctx.idle = async () => {
+    await ctx.tracker.whenIdle();
+    await ctx.stagingTracker.whenIdle();
+  };
   ctx.cleanup = () => {
     ctx.tracker.stopTimers();
     ctx.stagingTracker.stopTimers();
-    // Invariant: no raw IP is ever written to either log
-    for (const file of [analyticsFile, stagingAnalyticsFile]) {
+    // Invariant: no raw IP is ever written to any log, and no email body in the send log
+    for (const file of [analyticsFile, stagingAnalyticsFile, emailLogFile]) {
       if (!fs.existsSync(file)) continue;
       const raw = fs.readFileSync(file, 'utf8');
       for (const ip of TEST_IPS) assert.ok(!raw.includes(ip), `raw IP ${ip} leaked into ${path.basename(file)}`);
+    }
+    for (const line of ctx.emailLog()) {
+      assert.deepEqual(Object.keys(line).sort(), ['error', 'id', 'kind', 'ok', 'ref', 'site', 'subject', 'to', 'transport', 'ts'], 'send log fields only');
     }
     cleanupDirs(dirs.baseTmp);
   };
@@ -1356,6 +1372,13 @@ test('tracking: TEM failure is logged with [TEM], no retry, server keeps serving
     assert.equal(calls, 2); // one attempt per recipient, no retry
     assert.ok(errors.some((e) => e.startsWith('[TEM]') && e.includes('boom')));
     assert.equal((await ctx.prod('/pour/acme')).statusCode, 200);
+    // The TEM failure is logged and the Mailpit copy goes out anyway
+    assert.equal(ctx.mailpit.length, 2);
+    const log = ctx.emailLog();
+    assert.deepEqual(log.filter((l) => l.transport === 'tem').map((l) => [l.ok, l.error, l.id]), [
+      [false, 'HTTP 500 boom', null], [false, 'HTTP 500 boom', null],
+    ]);
+    assert.deepEqual(log.filter((l) => l.transport === 'mailpit').map((l) => l.ok), [true, true]);
   } finally {
     console.error = original;
     ctx.cleanup();
@@ -1385,6 +1408,40 @@ test('tracking: sendTemEmail calls the Scaleway TEM HTTPS API with the dedicated
     /HTTP 403/
   );
   await assert.rejects(sendTemEmail({ to: 'a@b.fr' }, { secretKey: '', projectId: 'p', fetch: fakeFetch }), /TEM_SECRET_KEY/);
+  // The TEM message id (emails[0].id) is returned for the send log
+  const id = await sendTemEmail(
+    { to: 'jcm@sdrnow.fr', subject: 'S', html: '<p>h</p>', text: 't' },
+    { secretKey: 'k', projectId: 'p', fetch: async () => ({ ok: true, status: 200, json: async () => ({ emails: [{ id: 'tem-123' }] }) }) }
+  );
+  assert.equal(id, 'tem-123');
+});
+
+test('mailpit: sendMailpitEmail POSTs {MAILPIT_URL}/api/v1/send (one recipient, tags) and returns the ID', async () => {
+  const calls = [];
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: true, status: 200, json: async () => ({ ID: 'mp-abc' }) };
+  };
+  const id = await sendMailpitEmail(
+    { to: 'jcm@sdrnow.fr', subject: '[STAGING] S', html: '<p>h</p>', text: 't', tags: ['staging'] },
+    { url: 'http://127.0.0.1:8025/mail/', fetch: fakeFetch, from: 'alertes@sdrnow.fr' }
+  );
+  assert.equal(id, 'mp-abc');
+  assert.equal(calls[0].url, 'http://127.0.0.1:8025/mail/api/v1/send');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].init.headers.Authorization, undefined, 'no credentials: Node calls the loopback directly');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    From: { Email: 'alertes@sdrnow.fr', Name: 'Radar SDRnow' },
+    To: [{ Email: 'jcm@sdrnow.fr' }],
+    Subject: '[STAGING] S',
+    Text: 't',
+    HTML: '<p>h</p>',
+    Tags: ['staging'],
+  });
+  await assert.rejects(
+    sendMailpitEmail({ to: 'a@b.fr', subject: 'S' }, { fetch: async () => ({ ok: false, status: 500, text: async () => 'down' }) }),
+    /HTTP 500 down/
+  );
 });
 
 test('tracking: midnight rotation sends the anonymous digest only when >= 1 human visited; anon_id rotates', async () => {
@@ -1697,22 +1754,209 @@ test('stats staging: staging.sdrnow.fr/stats shows only the staging test log wit
   }
 });
 
-test('no email from staging: 120 s idle after a test visit on /pour/acme, and the midnight rotation, never call sendEmail', async () => {
+test('alert staging: test visit on /pour/acme, 120 s idle -> one Mailpit send per recipient, [STAGING] prefix, tag staging, never TEM', async () => {
   const ctx = setupTracking();
   try {
     await ctx.staging('/pour/acme');
     await ctx.staging('/assets/logo.svg');
     await ctx.staging('/health', { method: 'POST', body: { e: 'init', p: '/pour/acme' } });
-    await ctx.staging('/rdv/starter');
-    assert.equal(ctx.stagingTracker.hasPendingAlert('acme'), false, 'no alert timer armed on staging');
+    assert.equal(ctx.stagingTracker.hasPendingAlert('acme'), true, 'alert timer armed on staging');
     await sleep(90); // > debounce (40 ms, stands for 120 s)
-    ctx.stagingTracker.flushAlerts();
-    ctx.clock = Date.parse('2026-10-20T22:00:30Z'); // midnight Paris: digest of the day
+    await ctx.idle();
+    assert.equal(ctx.sent.length, 0, 'TEM is never called from staging');
+    assert.equal(ctx.mailpit.length, 2);
+    assert.deepEqual(ctx.mailpit.map((m) => m.to).sort(), ['copie@example.fr', 'jcm@sdrnow.fr']);
+    for (const m of ctx.mailpit) {
+      assert.match(m.subject, /^\[STAGING\] 🔥 \[SDRnow\] acme vient de consulter votre offre/);
+      assert.deepEqual(m.tags, ['staging']);
+      assert.match(m.html, /href="https:\/\/staging\.sdrnow\.fr\/stats"/, 'staging alerts link to the staging stats');
+    }
+    const log = ctx.emailLog();
+    assert.equal(log.length, 2);
+    for (const l of log) {
+      assert.equal(l.site, 'staging');
+      assert.equal(l.kind, 'alert');
+      assert.equal(l.ref, 'acme');
+      assert.equal(l.transport, 'mailpit');
+      assert.equal(l.ok, true);
+      assert.equal(l.error, null);
+      assert.match(l.id, /^mp-\d$/);
+      assert.match(l.subject, /^\[STAGING\] 🔥/);
+    }
+    assert.equal(ctx.events().length, 0, 'nothing in the production log');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('alert staging: Mailpit unreachable -> logged ok:false with the error, no crash', async () => {
+  const ctx = setupTracking();
+  const errors = [];
+  const original = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  try {
+    ctx.stagingTracker.stopTimers();
+    ctx.stagingTracker = ctx.makeTracker({
+      analyticsFile: ctx.stagingAnalyticsFile,
+      site: 'staging',
+      sendMailpit: (m) => sendMailpitEmail(m, {
+        fetch: async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect'), { code: 'ECONNREFUSED' }) }); },
+      }),
+    });
+    ctx.handler = ctx.makeHandler(ctx.tracker, ctx.stagingTracker);
+    await ctx.staging('/pour/acme');
+    await ctx.staging('/assets/logo.svg');
+    await sleep(90);
+    await ctx.idle();
+    const log = ctx.emailLog();
+    assert.equal(log.length, 2);
+    for (const l of log) {
+      assert.equal(l.ok, false);
+      assert.equal(l.transport, 'mailpit');
+      assert.equal(l.id, null);
+      assert.equal(l.error, 'fetch failed (ECONNREFUSED)');
+    }
+    assert.ok(errors.some((e) => e.startsWith('[Mailpit]') && e.includes('ECONNREFUSED')));
+    assert.equal((await ctx.staging('/pour/acme')).statusCode, 200, 'staging keeps serving');
+  } finally {
+    console.error = original;
+    ctx.cleanup();
+  }
+});
+
+test('alert prod without TEM key: Mailpit capture tagged prod, no TEM call, send log site prod', async () => {
+  // No sendEmail option and no TEM_SECRET_KEY in the test environment: TEM inactive
+  const ctx = setupTracking({ sendEmail: undefined });
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => { fetchCalls += 1; return { ok: true, json: async () => ({}) }; };
+  try {
+    assert.equal(ctx.tracker.temEnabled, false);
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    await sleep(90);
+    await ctx.idle();
+    assert.equal(fetchCalls, 0, 'no TEM HTTPS call');
+    assert.equal(ctx.mailpit.length, 2);
+    for (const m of ctx.mailpit) {
+      assert.match(m.subject, /^🔥 \[SDRnow\] acme/, 'no [STAGING] prefix in prod');
+      assert.deepEqual(m.tags, ['prod']);
+    }
+    const log = ctx.emailLog();
+    assert.deepEqual(log.map((l) => [l.site, l.kind, l.ref, l.transport, l.ok]), [
+      ['prod', 'alert', 'acme', 'mailpit', true], ['prod', 'alert', 'acme', 'mailpit', true],
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    ctx.cleanup();
+  }
+});
+
+test('alert prod with TEM key: TEM send (id logged) + Mailpit copy tagged prod,tem -> 2 lines per recipient', async () => {
+  const tem = [];
+  const ctx = setupTracking({
+    sendEmail: async (m) => {
+      tem.push(m);
+      return `tem-${tem.length}`;
+    },
+  });
+  try {
+    assert.equal(ctx.tracker.temEnabled, true);
+    await ctx.prod('/pour/acme');
+    await ctx.prod('/assets/logo.svg');
+    await sleep(90);
+    await ctx.idle();
+    assert.equal(tem.length, 2);
+    assert.ok(tem.every((m) => m.tags === undefined), 'tags are a Mailpit-only field');
+    assert.equal(ctx.mailpit.length, 2);
+    for (const m of ctx.mailpit) assert.deepEqual(m.tags, ['prod', 'tem']);
+    const log = ctx.emailLog();
+    assert.equal(log.length, 4);
+    for (const to of ['jcm@sdrnow.fr', 'copie@example.fr']) {
+      const lines = log.filter((l) => l.to === to);
+      assert.deepEqual(lines.map((l) => l.transport).sort(), ['mailpit', 'tem']);
+      assert.match(lines.find((l) => l.transport === 'tem').id, /^tem-\d$/);
+      assert.match(lines.find((l) => l.transport === 'mailpit').id, /^mp-\d$/);
+      assert.ok(lines.every((l) => l.ok && l.site === 'prod'));
+    }
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('digest staging: midnight rotation after >= 1 human test visit -> [STAGING] digest to Mailpit; quiet day -> no send, no line', async () => {
+  const ctx = setupTracking();
+  try {
+    await ctx.staging('/');
+    await ctx.staging('/assets/logo.svg');
+    ctx.clock = Date.parse('2026-10-20T22:00:30Z'); // 00:00:30 Paris on Oct 21
     assert.equal(ctx.stagingTracker.rotateIfNeeded(), true);
-    await ctx.stagingTracker.whenIdle();
-    await ctx.tracker.whenIdle();
-    assert.equal(ctx.sent.length, 0, 'sendEmail never called by the staging tracker');
-    assert.ok(ctx.stagingEvents().length >= 4);
+    await ctx.idle();
+    assert.equal(ctx.sent.length, 0, 'never TEM from staging');
+    assert.equal(ctx.mailpit.length, 2);
+    for (const m of ctx.mailpit) {
+      assert.match(m.subject, /^\[STAGING\] 📊 \[SDRnow\] Bilan du 20 oct\. : 1 visiteur anonyme/);
+      assert.deepEqual(m.tags, ['staging']);
+    }
+    assert.deepEqual(ctx.emailLog().map((l) => [l.site, l.kind, l.ref, l.transport, l.ok]), [
+      ['staging', 'digest', '2026-10-20', 'mailpit', true], ['staging', 'digest', '2026-10-20', 'mailpit', true],
+    ]);
+
+    // Oct 21: no test visit at all
+    ctx.clock = Date.parse('2026-10-21T22:00:30Z');
+    assert.equal(ctx.stagingTracker.rotateIfNeeded(), true);
+    await ctx.idle();
+    assert.equal(ctx.mailpit.length, 2, 'no digest for a quiet day');
+    assert.equal(ctx.emailLog().length, 2, 'no send-log line for a quiet day');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('stats emails: each /stats shows the last 50 send-log lines of its own site, link to Mailpit; empty state without a log', async () => {
+  const ctx = setupTracking();
+  try {
+    const empty = await ctx.prodStats('/stats', { headers: adminHeaders() });
+    assert.equal(empty.statusCode, 200);
+    assert.match(empty.body, /📬 3\. Emails envoyés/);
+    assert.match(empty.body, /Aucun email envoyé pour l'instant depuis la prod/);
+    assert.match(empty.body, /href="https:\/\/staging\.sdrnow\.fr\/mail\/"/);
+
+    const line = (i, extra) => JSON.stringify({
+      ts: new Date(Date.parse('2026-10-20T08:00:00Z') + i * 60000).toISOString(),
+      site: 'prod', kind: 'alert', ref: 'acme', to: 'jcm@sdrnow.fr', subject: `prod-msg-${i}`,
+      transport: 'mailpit', ok: true, error: null, id: `mp-${i}`, ...extra,
+    });
+    const lines = [];
+    for (let i = 0; i < 60; i += 1) lines.push(line(i));
+    lines.push(line(60, { site: 'staging', subject: '[STAGING] staging-msg', ref: '2026-10-19', kind: 'digest' }));
+    lines.push(line(61, { transport: 'tem', ok: false, error: 'HTTP 500 boom', id: null, subject: 'prod-<script>-fail' }));
+    lines.push('{corrupt');
+    lines.push(line(62, { ts: 'pas-une-date', subject: 'bad-ts-line' }));
+    fs.mkdirSync(path.dirname(ctx.emailLogFile), { recursive: true });
+    fs.writeFileSync(ctx.emailLogFile, lines.join('\n') + '\n');
+
+    const prod = await ctx.prodStats('/stats', { headers: adminHeaders() });
+    assert.equal(prod.statusCode, 200, 'an invalid ts never breaks /stats');
+    assert.ok(!prod.body.includes('bad-ts-line'), 'line with an invalid ts skipped');
+    assert.ok(!prod.body.includes('staging-msg'), 'no staging line on the production page');
+    assert.ok(prod.body.includes('prod-msg-59</td>'));
+    // 61 production lines: the failed TEM line + prod-msg-11..59 are the last 50
+    assert.ok(prod.body.includes('prod-msg-11</td>'));
+    assert.ok(!prod.body.includes('prod-msg-10</td>'), 'only the last 50 lines of the site');
+    assert.ok(prod.body.indexOf('prod-&lt;script&gt;-fail') < prod.body.indexOf('prod-msg-59</td>'), 'most recent first');
+    assert.ok(!prod.body.includes('prod-<script>'), 'subject escaped');
+    assert.match(prod.body, /❌ Échec/);
+    assert.match(prod.body, /HTTP 500 boom/);
+    assert.match(prod.body, /Scaleway TEM/);
+    assert.match(prod.body, /✅ Envoyé/);
+
+    const staging = await ctx.staging('/stats');
+    assert.match(staging.body, /\[STAGING\] staging-msg/);
+    assert.match(staging.body, /📊 Bilan/);
+    assert.ok(!staging.body.includes('prod-msg-'), 'no production line on the staging page');
+    assert.match(staging.body, /href="https:\/\/staging\.sdrnow\.fr\/mail\/"/);
+    fs.writeFileSync(ctx.emailLogFile, lines.filter((l) => l !== '{corrupt').join('\n') + '\n'); // for the cleanup invariants
   } finally {
     ctx.cleanup();
   }
@@ -1882,7 +2126,7 @@ test('tracking: daily secret survives a same-day restart (tmpfs file 0600), visi
   }
 });
 
-test('tracking: without a TEM key, emails stay dormant (no HTTPS call) while tracking keeps working', async () => {
+test('tracking: without a TEM key, the digest goes to Mailpit only (no TEM HTTPS call) and is logged', async () => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), 'tests', 'tmp-dormant-'));
   const analyticsFile = path.join(dir, 'analytics.jsonl');
   fs.writeFileSync(analyticsFile, JSON.stringify({
@@ -1890,14 +2134,17 @@ test('tracking: without a TEM key, emails stay dormant (no HTTPS call) while tra
     event: 'init', target: null, duration: null, lang: 'fr', referer: null, ua_family: 'Mac (Chrome)',
   }) + '\n');
   const originalFetch = globalThis.fetch;
-  let calls = 0;
-  globalThis.fetch = async () => { calls += 1; return { ok: true }; };
+  const urls = [];
+  globalThis.fetch = async (url) => { urls.push(String(url)); return { ok: true, json: async () => ({ ID: 'mp-1' }) }; };
   try {
-    // No sendEmail option and no TEM_SECRET_KEY in the test environment
+    // No sendEmail / sendMailpit option and no TEM_SECRET_KEY in the test environment
     const tracker = createTracker({ analyticsFile, ctaTargets: CTA, alertRecipients: ['jcm@sdrnow.fr'], now: () => Date.parse('2026-10-20T12:00:00Z') });
     assert.equal(await tracker.sendDigest('2026-10-20'), true, 'the day had a human visitor');
     await tracker.whenIdle();
-    assert.equal(calls, 0, 'no TEM API call while emails are dormant');
+    assert.deepEqual(urls, ['http://127.0.0.1:8025/mail/api/v1/send'], 'Mailpit only, no TEM API call');
+    // Send log next to the injected analytics file, never the real /etc/sdrnow one
+    const log = fs.readFileSync(path.join(dir, 'email-log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(log.map((l) => [l.site, l.kind, l.ref, l.transport, l.ok, l.id]), [['prod', 'digest', '2026-10-20', 'mailpit', true, 'mp-1']]);
     tracker.stopTimers();
   } finally {
     globalThis.fetch = originalFetch;

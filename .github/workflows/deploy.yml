@@ -152,12 +152,55 @@ jobs:
             "EDITOR_SCRIPT_PATH=/opt/sdrnow/editor-client.js" \
             "ANALYTICS_FILE=/etc/sdrnow/analytics.jsonl" \
             "STAGING_ANALYTICS_FILE=/etc/sdrnow/analytics-staging.jsonl" \
+            "MAILPIT_URL=http://127.0.0.1:8025/mail" \
+            "EMAIL_LOG_FILE=/etc/sdrnow/email-log.jsonl" \
             "CTA_TARGET_HERO=${{ vars.CTA_TARGET_HERO }}" \
             "CTA_TARGET_STARTER=${{ vars.CTA_TARGET_STARTER }}" \
             "CTA_TARGET_STRATEGY=${{ vars.CTA_TARGET_STRATEGY }}" > /tmp/staging.env
           scp $SSH_OPTS /tmp/staging.env deploy@$SERVER_IP:/tmp/staging.env
           ssh $SSH_OPTS deploy@$SERVER_IP "sudo mkdir -p /etc/sdrnow && sudo chown caddy:caddy /etc/sdrnow && sudo cp /tmp/staging.env /etc/sdrnow/staging.env && sudo chmod 0600 /etc/sdrnow/staging.env && sudo chown caddy:caddy /etc/sdrnow/staging.env && rm -f /tmp/staging.env"
           rm -f /tmp/staging.env
+
+          # 8a. Mailpit (capture des emails, aucune livraison) : installé et démarré AVANT le redémarrage
+          #     de Node, qui lui envoie alertes et digests. Binaire vérifié par SHA-256 (idempotent).
+          cat > /tmp/install-mailpit.sh <<'MAILPIT_EOF'
+          set -euo pipefail
+          VERSION=v1.31.6
+          SHA256=10fa12ccc610f653d4ed4df848c1817f9935dcf4e9a6a458a19ab0fa02093f91
+          CURRENT=$(/usr/local/bin/mailpit version --no-release-check 2>/dev/null | awk '{print $2}' || true)
+          if [ "$CURRENT" = "$VERSION" ]; then
+            echo "Mailpit $VERSION déjà installé"
+          else
+            WORK=$(mktemp -d)
+            trap 'rm -rf "$WORK"' EXIT
+            curl -fsSL -o "$WORK/mailpit-linux-amd64.tar.gz" "https://github.com/axllent/mailpit/releases/download/$VERSION/mailpit-linux-amd64.tar.gz"
+            echo "$SHA256  $WORK/mailpit-linux-amd64.tar.gz" | sha256sum -c -
+            tar -xzf "$WORK/mailpit-linux-amd64.tar.gz" -C "$WORK" mailpit
+            install -o root -g root -m 0755 "$WORK/mailpit" /usr/local/bin/mailpit
+            echo "Mailpit $VERSION installé"
+          fi
+          MAILPIT_EOF
+          # htpasswd de l'UI : mêmes utilisateurs et mot de passe que staging. Le hash bcrypt contient des
+          # « $ » : écrit localement depuis la variable d'environnement puis copié, jamais interpolé dans ssh.
+          MAILPIT_HASH="$STAGING_PASSWORD_HASH"
+          case "$MAILPIT_HASH" in
+            '$2'*) ;;
+            *) MAILPIT_HASH=$(printf '%s' "$MAILPIT_HASH" | base64 -d) ;; # anciennes versions de caddy hash-password
+          esac
+          case "$MAILPIT_HASH" in
+            '$2'*) ;;
+            *) echo "::error::STAGING_PASSWORD_HASH n'est pas un hash bcrypt"; exit 1 ;;
+          esac
+          (umask 077 && printf 'admin:%s\nclient:%s\n' "$MAILPIT_HASH" "$MAILPIT_HASH" > /tmp/mailpit-ui.htpasswd)
+          scp $SSH_OPTS /tmp/install-mailpit.sh /tmp/mailpit-ui.htpasswd mailpit.service deploy@$SERVER_IP:/tmp/
+          rm -f /tmp/install-mailpit.sh /tmp/mailpit-ui.htpasswd
+          ssh $SSH_OPTS deploy@$SERVER_IP "sudo bash /tmp/install-mailpit.sh && rm -f /tmp/install-mailpit.sh \
+            && sudo install -o caddy -g caddy -m 0600 /tmp/mailpit-ui.htpasswd /etc/sdrnow/mailpit-ui.htpasswd && rm -f /tmp/mailpit-ui.htpasswd \
+            && sudo cp /tmp/mailpit.service /etc/systemd/system/mailpit.service && rm -f /tmp/mailpit.service \
+            && sudo systemctl daemon-reload && sudo systemctl enable mailpit.service && sudo systemctl restart mailpit.service"
+          # Démarrage vérifié (non bloquant : Node journalise les échecs d'envoi sans planter)
+          ssh $SSH_OPTS deploy@$SERVER_IP "for i in 1 2 3 4 5 6 7 8 9 10; do curl -fsS -o /dev/null http://127.0.0.1:8025/mail/readyz && echo 'Mailpit prêt' && exit 0; sleep 1; done; sudo systemctl status mailpit.service --no-pager || true; exit 1" \
+            || echo "::warning::Mailpit ne répond pas sur 127.0.0.1:8025 : emails non capturés (voir journalctl -u mailpit)"
 
           # 8b. Redémarrer Node (nouveau code + env) AVANT de recharger Caddy : le Caddyfile route
           #     désormais le trafic sdrnow.fr vers Node (fallback statique si Node est indisponible)

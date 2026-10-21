@@ -1,0 +1,22 @@
+[Unit]
+Description=Mailpit - capture of SDRnow emails (prod without TEM, copy of TEM sends, all staging); never delivers anything
+After=network.target
+
+[Service]
+Type=simple
+User=caddy
+Group=caddy
+# /var/lib/mailpit (owned by caddy): message database, kept across restarts and deploys
+StateDirectory=mailpit
+StateDirectoryMode=0700
+# Loopback only. UI + API behind /etc/sdrnow/mailpit-ui.htpasswd (admin password), served by Caddy
+# on staging.sdrnow.fr/mail/; the Send API (no auth) is blocked by Caddy, only Node calls it directly.
+# No relay configured: Mailpit never delivers any email.
+ExecStart=/usr/local/bin/mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025 --webroot /mail/ --database /var/lib/mailpit/mailpit.db --max 1000 --ui-auth-file /etc/sdrnow/mailpit-ui.htpasswd --send-api-auth-accept-any --disable-version-check
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

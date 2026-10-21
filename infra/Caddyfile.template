@@ -63,5 +63,21 @@ sdrnow.fr, www.sdrnow.fr {
 }
 
 staging.sdrnow.fr {
-    reverse_proxy 127.0.0.1:3001
+    # Mailpit (captured emails, never delivered): UI + API behind the admin password (Mailpit's own
+    # Basic Auth, htpasswd). The Send API accepts any caller: it is reserved to Node, which calls it
+    # directly on 127.0.0.1:8025, and is never reachable from outside.
+    @mailpit_send path /mail/api/v1/send /mail/api/v1/send/*
+    @mailpit path /mail /mail/*
+
+    handle @mailpit_send {
+        respond "403 Forbidden" 403
+    }
+
+    handle @mailpit {
+        reverse_proxy 127.0.0.1:8025
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:3001
+    }
 }
