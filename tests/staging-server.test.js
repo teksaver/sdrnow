@@ -1285,6 +1285,36 @@ test('tracking: CTA routes log cta_click and 302 to the per-offer target, no-sto
   }
 });
 
+test('tracking: two prospect tabs in the same browser -> each beacon ping and CTA click goes to the page that sent it', async () => {
+  const ctx = setupTracking();
+  try {
+    // Tab A: first test, read for a while
+    await ctx.prod('/pour/test-mail');
+    await ctx.prod('/assets/logo.svg');
+    await ctx.health({ e: 'init', p: '/pour/test-mail' });
+    // Tab B, same browser (same anon_id): quick 2 s visit of another link
+    await ctx.prod('/pour/test-2s');
+    await ctx.prod('/assets/logo.svg');
+    await ctx.health({ e: 'init', p: '/pour/test-2s' });
+    // Tab A, now hidden, sends its remaining visible seconds; tab B is closed after 2 s
+    await ctx.health({ e: 'ping', p: '/pour/test-mail', d: 18 });
+    await ctx.health({ e: 'ping', p: '/pour/test-2s', d: 2 });
+    // CTA clicked from tab A: attributed through the same-site Referer
+    await ctx.prod('/rdv/starter', { headers: { Referer: 'https://sdrnow.fr/pour/test-mail' } });
+    // A non-prospect page keeps the last prospect link of the visitor (navigation /pour/x -> /en)
+    await ctx.health({ e: 'pricing_view', p: '/en' });
+
+    const events = ctx.events();
+    const durationOf = (slug) => events.filter((e) => e.slug === slug && e.event === 'ping').reduce((n, e) => n + e.duration, 0);
+    assert.equal(durationOf('test-2s'), 2);
+    assert.equal(durationOf('test-mail'), 18);
+    assert.equal(events.find((e) => e.event === 'cta_click').slug, 'test-mail');
+    assert.equal(events.find((e) => e.event === 'pricing_view').slug, 'test-2s');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
 test('tracking: the same anon_id opening /en afterwards stays attached to the prospect (RAM map of the day)', async () => {
   const ctx = setupTracking();
   try {

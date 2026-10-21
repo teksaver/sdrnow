@@ -772,6 +772,31 @@ function langFromPath(p) {
   return p === '/en' || String(p).startsWith('/en/') ? 'en' : 'fr';
 }
 
+// Prospect slug of a page path (/pour/<slug>, /offre/<slug>, /en/for/<slug>, /en/offer/<slug>), else null
+export function prospectSlugFromPath(p) {
+  const m = PROSPECT_ROUTE_RE.exec(String(p || ''));
+  if (!m) return null;
+  let slug;
+  try {
+    slug = decodeURIComponent(m[2]);
+  } catch {
+    return null;
+  }
+  return SLUG_RE.test(slug) ? slug.toLowerCase() : null;
+}
+
+// Path of a same-site Referer (the page a CTA was clicked from), else ''
+function refererPath(req) {
+  const raw = req.headers['referer'] || req.headers['referrer'];
+  if (typeof raw !== 'string' || !raw) return '';
+  try {
+    const url = new URL(raw);
+    return url.hostname.toLowerCase() === getHostname(req) ? url.pathname : '';
+  } catch {
+    return '';
+  }
+}
+
 function refererHost(req) {
   const raw = req.headers['referer'] || req.headers['referrer'];
   if (typeof raw !== 'string' || !raw) return '';
@@ -1565,7 +1590,9 @@ export function createTracker(options = {}) {
       ts: new Date(now()).toISOString(),
       date: currentDate,
       anon_id: anon,
-      slug: state.slug,
+      // fields.slug: the prospect page that emitted the event (another open tab of the same
+      // browser shares the anon_id, so state.slug, the last prospect link opened, may differ)
+      slug: fields.slug || state.slug,
       tier: state.tier,
       event,
       target: fields.target ?? null,
@@ -1620,12 +1647,12 @@ export function createTracker(options = {}) {
     const t = typeof payload.t === 'string' ? payload.t.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) : '';
     const dRaw = Number(payload.d);
     const duration = payload.e === 'ping' && Number.isFinite(dRaw) ? Math.min(Math.max(Math.round(dRaw), 0), 86400) : null;
-    return logEvent(anon, state, payload.e, { target: t || null, duration, lang: p ? langFromPath(p) : null, tester });
+    return logEvent(anon, state, payload.e, { target: t || null, duration, lang: p ? langFromPath(p) : null, slug: prospectSlugFromPath(p), tester });
   }
 
   function recordCta(req, key, lang, { tester = null } = {}) {
     const { anon, state } = visit(req);
-    return logEvent(anon, state, 'cta_click', { target: key, lang, referer: refererHost(req), tester });
+    return logEvent(anon, state, 'cta_click', { target: key, lang, referer: refererHost(req), slug: prospectSlugFromPath(refererPath(req)), tester });
   }
 
   function stats(period) {
